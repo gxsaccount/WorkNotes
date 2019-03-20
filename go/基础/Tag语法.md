@@ -1,6 +1,6 @@
 可以通过Tag来增强结构体的定义，Tag会带上一些meta信息  
 
-##反射获取Tag##  
+## 反射获取Tag ##  
 
     //不管是raw string还是interpreted string都可以用来当tag。 如果field定义时候两个名字公用一个属性，那么这个tag会被附在两个名字上，像f4,f5一样。  
     type T struct{
