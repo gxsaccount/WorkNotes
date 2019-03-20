@@ -1,0 +1,5 @@
+1.共享内存：synchronized等
+2.voltile变量的while轮询的方式
+3.wait/notify机制
+4.管道通信就是使用java.io.PipedInputStream 和 java.io.PipedOutputStream进行通信
+5.socket

@@ -1,0 +1,29 @@
+Error与Exception的区别
+首先，Error类和Exception类都是继承Throwable类
+
+Error（错误）是系统中的错误，程序员是不能改变的和处理的，是在程序编译时出现的错误，只能通过修改程序才能修正。一般是指与虚拟机相关的问题，
+如系统崩溃，虚拟机错误，内存空间不足，方法调用栈溢等。对于这类错误的导致的应用程序中断，仅靠程序本身无法恢复和和预防，遇到这样的错误，建议让程序终止。
+
+Exception（异常）表示程序可以处理的异常，可以捕获且可能恢复。遇到这类异常，应该尽可能处理异常，使程序恢复运行，而不应该随意终止异常。
+
+　　Exception又分为两类
+
+　　　　CheckedException：（编译时异常） 需要用try——catch显示的捕获，对于可恢复的异常使用CheckedException。
+
+　　　　UnCheckedException（RuntimeException）：（运行时异常）不需要捕获，对于程序错误（不可恢复）的异常使用RuntimeException。
+
+常见的RuntimeException异常
+
+　　illegalArgumentException：此异常表明向方法传递了一个不合法或不正确的参数。
+
+　　illegalStateException：在不合理或不正确时间内唤醒一方法时出现的异常信息。换句话说，即 Java 环境或 Java 应用不满足请求操作。
+
+　　NullpointerException：空指针异常（我目前遇见的最多的）
+
+　　IndexOutOfBoundsException：索引超出边界异常
+
+常见的CheckedException异常
+
+　　我们在编写程序过程中try——catch捕获到的一场都是CheckedException。
+
+　　io包中的IOExecption及其子类，都是CheckedException。

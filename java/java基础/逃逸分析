@@ -1,0 +1,17 @@
+逃逸分析的基本行为就是分析对象动态作用域：当一个对象在方法中被定义后，它可能被外部方法所引用，称为方法逃逸。甚至还有可能被外部线程访问到，譬如赋值给类变
+量或可以在其他线程中访问的实例变量，称为线程逃逸。
+通过逃逸分析来决定某些实例或者变量是否要在堆中进行分配，如果开启了逃逸分析，即可将这些变量直接在栈上进行分配，而非堆上进行分配。这些变量的指针可以被全局
+所引用，或者其其它线程所引用。
+如：
+public class EscapeTest {
+    public static Object obj;
+    public void globalVariableEscape() {  // 给全局变量赋值，发生逃逸
+        obj = new Object();
+    }
+    public Object methodEscape() {  // 方法返回值，发生逃逸
+        return new Object();
+    }
+    public void instanceEscape() {  // 实例引用发生逃逸
+        test(this); 
+    }
+}

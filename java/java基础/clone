@@ -1,0 +1,2 @@
+Object的clone时浅拷贝。
+集合和map的clone是：类似于ArrayList这个类实现了深拷贝，但是存储的对象还是浅拷贝
