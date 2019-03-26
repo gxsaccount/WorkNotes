@@ -150,7 +150,8 @@ HashMap()
  4.与切片和字典类型相同，通道类型属于引用类型。它的零值即为nil
  5.单向通道可以被赋值为双向通道，双向通道不能赋值为单向通道
  6.发送时，通道获取的是值的副本，不是原值  
-      
+ 7.可以用range获取通道中的数据，通道关闭后
+ 
       type Sender chan<- int
       type Receiver <-chan int
       func main() {
@@ -170,6 +171,29 @@ HashMap()
             time.Sleep(time.Second)
       }
       //以上代码打印顺序为 “Received! 6 Sent”，因为Sent之前被阻塞，“<-receiver”之后才能执行
+      
+      
+      func main(){
+	var myChannel = make(chan int,1)
+	var temp int
+	go func() {
+		var count int
+		count =0
+		for{
+			count++
+			myChannel<-1
+			if count>10{
+				close(myChannel)
+				break//没有break会造成重复关闭恐慌
+			}
+
+		}
+	}()
+
+	for temp = range myChannel{//如果chan不关闭将会一直执行下去
+		fmt.Print(temp)
+	}
+
  
 
   ## 结构体 ##
