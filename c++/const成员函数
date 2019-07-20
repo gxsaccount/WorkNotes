@@ -1,8 +1,0 @@
-规则：只要成员函数不修改对象，就应该为const成员函数。
-格式：
-void function() const
-{}
-
-避免如下情况出现：
-const Class class
-class.function()//错误，因为function可能会修改class
