@@ -13,6 +13,15 @@
         name = "coworkers_project",
         path = "/path/to/coworkers-project",
     )
+    
+    load("@bazel_tools//tools/build_defs/repo:http.bzl", "http_archive")
+    http_archive(
+        name = "testrunner",
+        urls = ["https://github.com/testrunner/v1.zip"],
+        sha256 = "...",
+    )
+    
+    
   
 如果coworker有一个//foo:bar的target,本项目可以使用@coworkers_project//foo:bar来引用它.  
 
@@ -38,4 +47,90 @@
 ## 外部packages ##  
 Use the [!https://github.com/bazelbuild/rules_jvm_external] rules_jvm_external to download artifacts from Maven repositories and make them available as Java dependencies.
 
+## Shadowing dependencies ##  
+引入多个外部依赖时,它们可能会存在冲突,例如  
+workspace(name = "myproject")
+        
+        myproject/WORKSPACE
+        local_repository(
+            name = "A",
+            path = "../A",
+        )
+        local_repository(
+            name = "B",
+            path = "../B",
+        )
+        
+        A/WORKSPACE
+        workspace(name = "A")
+        load("@bazel_tools//tools/build_defs/repo:http.bzl", "http_archive")
+        http_archive(
+            name = "testrunner",
+            urls = ["https://github.com/testrunner/v1.zip"],
+            sha256 = "...",
+        )
+        
+        B/WORKSPACE
+        workspace(name = "B")
+        load("@bazel_tools//tools/build_defs/repo:http.bzl", "http_archive")
+        http_archive(
+            name = "testrunner",
+            urls = ["https://github.com/testrunner/v2.zip"],
+            sha256 = "..."
+        )
+   
+依赖A和B都依赖于"testrunner",但是它们依赖的版本不同.  
+解决办法如下:  
+    
+    myproject/WORKSPACE
+    workspace(name = "myproject")
 
+    load("@bazel_tools//tools/build_defs/repo:http.bzl", "http_archive")
+    http_archive(
+        name = "testrunner-v1",
+        urls = ["https://github.com/testrunner/v1.zip"],
+        sha256 = "..."
+    )
+    http_archive(
+        name = "testrunner-v2",
+        urls = ["https://github.com/testrunner/v2.zip"],
+        sha256 = "..."
+    )
+    local_repository(
+        name = "A",
+        path = "../A",
+        repo_mapping = {"@testrunner" : "@testrunner-v1"}
+    )
+    local_repository(
+        name = "B",
+        path = "../B",
+        repo_mapping = {"@testrunner" : "@testrunner-v2"}
+    )
+    
+    
+## Using Proxies ##  
+Bazel will pick up proxy addresses from the HTTPS_PROXY and HTTP_PROXY environment variables and use these to download HTTP/HTTPS files (if specified).
+## Transitive dependencies ##  
+bazel只会读取列在WORKSPACE的文件,如果A依赖于B,B依赖于C,需要将B和C写入到A的WORKSPACE文件.  
+
+## Caching of external dependencies ##  
+Bazel caches external dependencies and re-downloads or updates them when the WORKSPACE file changes.
+
+## Layout ##  
+外部依赖都会被下载在external文件夹中,注意bazel clean不会删除这里的文件,需要和使用bazel clean --expunge才行  
+
+## 仓库的规则 ##  
+1.http_archive好于git_repository and new_git_repository.  
+ Do not use bind(). See “https://github.com/bazelbuild/bazel/issues/1952” for a long discussion of its issues and alternatives.
+2.使用new_的存储库规则时，最好指定生成文件内容，而不是生成文件。  
+
+Repository rules
+    
+    存储库规则通常应负责：
+    检测系统设置并将其写入文件。
+    在系统的其他地方寻找资源。
+    从url下载资源。
+    生成生成文件或将生成文件符号链接到外部存储库目录。  
+尽可能避免使用repository_ctx.execute。  
+例如，当使用make编译的C++库时，最好使用repository_ctx.download()，  
+然后编写BUILD文件，而不是运行running ctx.execute(["make"])。   
