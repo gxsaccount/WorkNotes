@@ -1,1 +1,41 @@
+# 可以支持的外部依赖 #  
+1.其他bazel项目  
+2.其他非bazel项目  
+3.外部packages  
+
+# 其他的bazel项目 #  
+1.使用local_repository引用本地的文件系统,   
+2.使用git_repository引用一个git仓库,  
+3.使用http_archive来下载项目  
+## 使用local_repository引用本地的文件系统 ##  
+
+    local_repository(
+        name = "coworkers_project",
+        path = "/path/to/coworkers-project",
+    )
+  
+如果coworker有一个//foo:bar的target,本项目可以使用@coworkers_project//foo:bar来引用它.  
+
+## 其他非bazel项目 ##  
+使用前缀 new_,例如new_local_repository来创建非bazel项目的targets  
+假如需要引入的项目使用make来编译,本项目需要使用其编译后的.so文件,采用如下方式:
+ 
+    new_local_repository(
+        name = "coworkers_project",
+        path = "/path/to/coworkers-project",
+        build_file = "coworker.BUILD",
+    )
+    
+    build_file specifies a BUILD file to overlay on the existing project, for example:
+    cc_library(
+        name = "some-lib",
+        srcs = glob(["**"]),
+        visibility = ["//visibility:public"],
+    )
+
+    You can then depend on @coworkers_project//:some-lib from your project’s BUILD files.  
+    
+## 外部packages ##  
+Use the [!https://github.com/bazelbuild/rules_jvm_external] rules_jvm_external to download artifacts from Maven repositories and make them available as Java dependencies.
+
 
