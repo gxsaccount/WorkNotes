@@ -1,6 +1,8 @@
+# proto语法 #
 ## proto例子 ##  
-
-    syntax = "proto2";
+    
+    //tutorial.poto
+    syntax = "proto2";//声明使用poto的版本,默认poto3
     package tutorial; //package声明,防止不同项目定义冲突
 
     message Person {
@@ -25,7 +27,8 @@
     message AddressBook {
       repeated Person people = 1;
     }
-    
+
+## 语法解释 ##
 **message**  
 消息是包含一组类型字段的聚合  
 **类型使用**  
@@ -40,5 +43,20 @@ repeated:该字段可以重复任意次（包括零次),重复值的顺序将保
 在反序列化的时候，protobuf会从输入流中读取出字段编号，然后再设置message中对应的值。    
 如果读出来的字段编号是message中没有的，就直接忽略，  
 如果message中有字段编号是输入流中没有的，则该字段不会被设置。  
-但是如果两端同一编号的字段规则或者字段类型不一样，就会影响反序列化。  
+但是如果两端同一编号的字段规则或者字段类型不一样，就会影响反序列化。 
+范围1到15中的字段编号需要一个字节进行编码,包括字段编号和字段类型。  
+范围16至2047中的字段编号需要两个字节。  **???**
+所以需要保留数字1到15作为非常频繁出现的消息元素。  
 **所以一般调整proto文件的时候，尽量选择加字段或者删字段，而不是修改字段编号或者字段类型。**  
+
+# 在C++中使用 #  
+## 编译potobuf ##  
+使用poto编译器编译
+    
+    protoc -I=$SRC_DIR --cpp_out=$DST_DIR $SRC_DIR/tutorial.poto  
+命令生成两个文件:
+    
+    lm.helloworld.pb.h ， 定义了 C++ 类的头文件
+    lm.helloworld.pb.cc ， C++ 类的实现文件
+
+## 编写writer和Reader ##  
