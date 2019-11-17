@@ -1,0 +1,8 @@
+    
+    mgsdk::mgb::Tensor dst_copy(MGBC_CPU);
+    dst_copy.copy_from(dst).sync();
+    std::cout << dst_copy.shape(1) << ", " << dst_copy.shape(2) << std::endl;
+    cv::Mat full(dst_copy.shape(1), dst_copy.shape(2), CV_8UC3,
+        reinterpret_cast<uint8_t*>(dst_copy.data_ptr()));
+    static int id = 0;
+    cv::imwrite("result/input_" + std::to_string(id++) + ".png", full);
