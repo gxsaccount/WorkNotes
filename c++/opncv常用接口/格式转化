@@ -1,0 +1,11 @@
+#include <opencv2/opencv.hpp>
+#include <opencv2/core/core.hpp>
+#include <opencv2/highgui/highgui.hpp>
+
+转换并保存
+
+string filename="out.png";
+cv::Mat rgb_img;
+cv::cvtColor(yuv_img, rgb_img, CV_YUV420sp2RGB);
+cv::imwrite(filename, rgb_img);
+cv::imshow("rgb_img:",rgb_img);
