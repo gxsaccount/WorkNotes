@@ -1,0 +1,66 @@
+#include <npp.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <time.h>
+#include <string.h>
+#include <nppi_support_functions.h>
+#include <nppi_color_conversion.h>
+#include <iostream>
+#include <opencv2/core/core.hpp>
+#include <opencv2/highgui/highgui.hpp>
+#include <opencv2/opencv.hpp>
+#include "opencv2/imgcodecs.hpp"
+#include "opencv2/imgproc.hpp"
+#include <cuda_runtime.h>
+#include <cuda_runtime_api.h>
+#include <opencv2/core/cuda.hpp>
+
+int main(){
+    
+    std::string input_file = "rgb.png";
+    std::string output_file = "test.png";
+    std::string output_file1 = "test.png";
+
+    cudaError_t copy_ret;
+    cv::Mat img_rgb = cv::imread(input_file, 1);//1920x1080x3
+    std::cout<<img_rgb.size<<std::endl;//1920x1080
+    std::cout<<img_rgb.step<<std::endl;//1920x3
+    std::cout<<img_rgb.cols<<std::endl;
+    std::cout<<img_rgb.rows<<std::endl;
+    int stepSource;
+    //step = (column elements) * sizeof(element datatyp) 
+    //nppiMalloc_8u_C3会补齐?  6144
+    Npp8u *frame = nppiMalloc_8u_C3(img_rgb.cols, img_rgb.rows, &stepSource);
+    std::cout << "stepSource: " << stepSource << std::endl;
+    std::cout << "img_rgb.cols: " << img_rgb.cols << std::endl;
+    std::cout << "size0f(Npp8U): " << sizeof(Npp8u)<< std::endl;
+    copy_ret  = cudaMemcpy2D(
+        frame,
+        stepSource,
+        img_rgb.data,
+        img_rgb.step, 
+        img_rgb.cols*img_rgb.channels(),
+        img_rgb.rows,
+        cudaMemcpyHostToDevice);
+
+    std::cout << "cudaMemcpy2D: " << copy_ret << std::endl;
+
+    // cudaMemset(frame,1,img_rgb.cols * stepSource* sizeof(Npp8u));
+    // memset(frame, 0, img_rgb.cols * stepSource* sizeof(Npp8u)); //segment default
+
+
+    uint8_t *h_frame = (uint8_t *)malloc(img_rgb.cols * img_rgb.step);
+
+    copy_ret = cudaMemcpy2D(
+        h_frame,
+        img_rgb.step,
+        frame,
+        stepSource,
+        img_rgb.cols*img_rgb.channels(), 
+        img_rgb.rows,
+        cudaMemcpyDeviceToHost);
+    std::cout << "cudaMemcpy2D: " << copy_ret << std::endl;
+    // std::cout<<frame[0]<<std::endl;
+    cv::Mat out1 = cv::Mat(img_rgb.rows , img_rgb.cols, CV_8UC3, h_frame,img_rgb.step);
+    cv::imwrite(output_file1, out1);
+}
