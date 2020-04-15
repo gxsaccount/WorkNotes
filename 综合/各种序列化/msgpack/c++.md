@@ -4,6 +4,7 @@ apt-get install libmsgpack-dev
 会安装在/usr/lib/ 和 /usr/include 下  
 
 2.基本使用:
+  
   std::string path="...."
   myclass item {};
   //写入
