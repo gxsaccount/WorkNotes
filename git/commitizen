@@ -1,5 +1,9 @@
 sudo npm install -g commitizen
 规范commit格式
+1.自动
+通过pip安装commitizen，将原先的git commit替换为cz c
+
+2.手动
 https://www.jianshu.com/p/d264f88d13a4
 https://cloud.tencent.com/developer/article/1598663
 commitizen init cz-conventional-changelog --save --save-exact
