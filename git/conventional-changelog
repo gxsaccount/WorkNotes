@@ -1,0 +1,2 @@
+sudo npm install -g conventional-changelog
+自动生成changelog
