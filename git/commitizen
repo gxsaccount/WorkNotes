@@ -1,0 +1,2 @@
+sudo npm install -g commitizen
+规范commit格式
