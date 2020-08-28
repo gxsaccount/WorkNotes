@@ -2,3 +2,5 @@ moz-extension://b99cd6fb-16d9-4593-b8fb-f4d41a0976f4/assets/pdf/web/viewer.html?
 
 
 nvidia-smi topo -m
+
+不同node间拷贝会有1个数量级差异
