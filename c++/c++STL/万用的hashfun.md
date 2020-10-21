@@ -3,7 +3,7 @@
     template<typename T>
     inline void hash_combine(size_t& seed, const T& val)
     {
-      seed ^= std::hash<T>()(val) + 0x9e3779b9 + (seed << 6) + (seed >> 2);
+      seed ^= std::hash<T>()(val) + 0x9e3779b9 + (seed << 6) + (seed >> 2);//黄金比例1.9e3779b9 -1
     }
 
     //递归调用出口
