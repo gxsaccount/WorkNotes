@@ -1,5 +1,6 @@
     
-    //计算种子数值
+   ## 万用的hashfunc ##
+   //计算种子数值
     template<typename T>
     inline void hash_combine(size_t& seed, const T& val)
     {
@@ -30,3 +31,7 @@
       hash_val(seed, args...);
       return seed;
     }
+
+## struct hash 偏特化 ##  
+
+    hash<T>
