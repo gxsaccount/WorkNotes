@@ -170,3 +170,68 @@ std::cout << "tuple_3 = " << tuple_3.c_str() << "\n";
 
 1     auto t1 = std::make_tuple(1, 'A', "-=+", 2);
 2     std::cout << t1;
+
+
+
+
+## 实现 ##   
+
+#include <iostream>
+using namespace std;
+ 
+ 
+template<typename... Values>class Tuple;
+template<>class Tuple<> {}; //偏特化，中止条件
+template<typename Head, typename... Tail>
+class Tuple<Head, Tail...>
+	:private Tuple<Tail...>	// 私有继承自Tuple<Tail...>
+{
+	using inherited = Tuple<Tail...>; //定义inherited 为 基类类型
+public:
+	Tuple(){}  
+	Tuple(Head v, Tail... vtail) // 将第一个元素 赋值给m_head, 其余传给基类
+		:m_head(v), inherited(vtail...)
+	{}
+ 
+	Head head() { return m_head; }  // 返回元组的第一个元素
+	inherited& tail() { return *this; } // 返回该元组的基类引用
+protected:
+	Head m_head;
+};
+ 
+ 
+template<typename Head, typename... Tail> //typename... Tail 多个类型
+ostream& operator<<(ostream& os, Tuple<Head, Tail...>& tpe) // 当元素个数大于1时调用该方法
+{
+	os <<  tpe.head() << ",";
+	operator<<(os, tpe.tail()); // 将tpe的基类作为输出的对象 递归调用输出函数
+	return os;
+}
+ 
+template<typename T>
+ostream& operator<<(ostream& os, Tuple<T>& tpe) // 当元素个数为 1 是调用该方法
+{
+	os  << tpe.head();
+	return os;
+}
+ 
+ 
+int main(void)
+{
+	Tuple<int, string, float> mt(10, "fsdf", 23.);
+	cout << mt.head() << endl; // 输出: 10
+	cout << (mt.tail()).head() << endl; // 输出: fsdf
+	cout << ((mt.tail()).tail()).head() << endl; //输出: 23
+ 
+	cout << "--------------------" << endl;
+ 
+	cout << "Tuple<" << mt << ">" << endl; //输出: Tuple<10, fsdf, 23>
+ 
+	system("pause");
+	return 0;
+}
+  Tuple<int, string, float> 继承自 Tuple<string, float>
+
+  Tuple<string, float> 继承自 Tuple<float>
+
+  Tuple<float> 继承自 Tuple<>
