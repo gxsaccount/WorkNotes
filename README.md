@@ -1,1 +1,2 @@
-# LanguageNotes
+# LanguageNotes 
+笔记
