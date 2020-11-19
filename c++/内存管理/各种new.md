@@ -97,3 +97,35 @@
             //实际上,这四个函数必须是static,因为new对象时并没有实例化函数,却要用成员函数,但是c++自己优化了,默认隐式的static
         }
         
+##重载new()/delete()##  
+重载class member operator new()，**其中第一参数必须为size_t，其余参数是以new指定的placement arguments为初值**    
+重载class member operator delete(),**只有构造函数抛出异常**，才会调用对应重载的operator delete，**主要功能是用来归还未能创建成功的object所占用的memory。**   
+
+    class Foo{
+        public:
+        Foo() {};
+        Foo(int){};
+        //1.一般的operator new() /delete重载
+        void* operator new(size_t size){
+            return malloc(size);
+        }
+        void operator delete(void*,size_t size){}
+
+        //2.placement new()的重载
+        void* operator new(size_t size,void* start){
+            return start;
+        }
+        void operator delete(void*,void* ){}  
+
+        //3.新的palcement new
+        void* operator new(size_t size,long extra){
+            return malloc(size+extra);
+        }
+        void operator delete(void*,long){}  
+
+        //4.新的palcement new2
+        void* operator new(size_t size,long extra,char init){
+            return malloc(size+extra);
+        }
+        void operator delete(void*,long,char){}  
+    }
