@@ -100,7 +100,7 @@
 ##重载new()/delete()##  
 重载class member operator new()，**其中第一参数必须为size_t，其余参数是以new指定的placement arguments为初值**    
 重载class member operator delete(),**只有构造函数抛出异常**，才会调用对应重载的operator delete，**主要功能是用来归还未能创建成功的object所占用的memory。**   
-
+不重载也行，默认放弃处理ctor抛出的异常。  
     class Foo{
         public:
         Foo() {};
