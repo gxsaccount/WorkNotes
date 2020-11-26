@@ -129,3 +129,8 @@
         }
         void operator delete(void*,long,char){}  
     }
+    
+    
+    
+    
+operator new()/delete() 可以使用=delete，=defalut不行  
