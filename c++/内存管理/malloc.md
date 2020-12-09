@@ -3,7 +3,7 @@
 main()是c++的接入函数  
 mainCRTStartup():gcc也有类似操作，c runtime   
 _heap_init():  
-crt_heap:先要4096的堆大小初始化crt_heap  
+crt_heap:先要4096的堆大小初始化crt_heap，后续不够继续加  
 sbh_heap:再初始化16个sbh_heap的Header，用来做内存管理(crt_heap)      
 [Header结构]  
 _ioinit():  
@@ -22,7 +22,8 @@ _ioinit():
 
 [malloc内存分配]  
 tagRegion:  
-bitvec是usigned int ，
+bitvec是usigned int ，高位低位共32个，对应32个group，  
+每个bitvec长度为64对应group的64个链表，bit位为1代表有内存挂在group里面  
 管理哪些区块是否存在链表中  
 
 tagGroup：  
@@ -44,4 +45,7 @@ tagGroup：
 0x00000131是130+1,加1表示已经被使用（因为切割大小一定是16的倍数，末尾一定是0，所以用来标识是否被使用）   
 
 
-
+[sbh内存图]
+virtual_mlloc：  
+MEM_RESERVE:占位  
+MEM_COMMIT:给予内存
