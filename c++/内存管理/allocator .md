@@ -329,5 +329,5 @@
 # global allocater #  
 标准库的allocater雏形，多条不同大小的链表   
 有16条free-lists，每条free-list的大小不一致。  
-
+[global_allocater.png]
 
