@@ -7,7 +7,15 @@
     run: 与前面的 docker 组合来运行一个容器。
     ubuntu:15.10 指定要运行的镜像，Docker 首先从本地主机上查找镜像是否存在，如果不存在，Docker 就会从镜像仓库 Docker Hub 下载公共镜像。
     /bin/echo "Hello world": 在启动的容器里执行的命令
-        
+    
+    当我们创建一个容器的时候，docker 会自动对它进行命名。另外，我们也可以使用 --name 标识来命名容器，例如：
+    runoob@runoob:~$  docker run -d -P --name runoob training/webapp python app.py
+    43780a6eabaaf14e590b6e849235c75f3012995403f97749775e38436db9a441
+    我们可以使用 docker ps 命令来查看容器名称。
+    runoob@runoob:~$ docker ps -l
+    CONTAINER ID     IMAGE            COMMAND           ...    PORTS                     NAMES
+    43780a6eabaa     training/webapp   "python app.py"  ...     0.0.0.0:32769->5000/tcp   runoob
+
 ## 启动docker的bash（交互式容器） ##  
 
     docker run -i -t ubuntu:15.10 /bin/bash 
@@ -152,6 +160,8 @@ NAMES: 自动分配的容器名称。
 1、从已经创建的容器中更新镜像，并且提交这个镜像  
 2、使用 Dockerfile 指令来创建一个新的镜像  
 
+
+
 ## 更新镜像 ##   
 更新镜像之前，我们需要使用镜像来创建一个容器。
     
@@ -229,9 +239,49 @@ docker port 命令可以让我们快捷地查看端口的绑定情况
     docker port adoring_stonebraker 5000  
 
 # Docker 容器互联 #  
-
 端口映射并不是唯一把 docker 连接到另一个容器的方法。
-
 docker 有一个连接系统允许将多个容器连接在一起，共享连接信息。
-
 docker 连接会创建一个父子关系，其中父容器可以看到子容器的信息。  
+##新建网络##  
+
+    docker network create -d bridge test-net    
+    参数说明：  
+    -d：参数指定 Docker 网络类型，有 bridge、overlay。  
+    其中 overlay 网络类型用于 Swarm mode。  
+
+## 连接容器 ##  
+
+    #运行一个容器并连接到新建的 test-net 网络:
+    $ docker run -itd --name test1 --network test-net ubuntu /bin/bash
+    #打开新的终端，再运行一个容器并加入到 test-net 网络:
+    $ docker run -itd --name test2 --network test-net ubuntu /bin/bash
+    通过 ping 来证明 test1 容器和 test2 容器建立了互联关系  
+    
+    apt-get update
+    apt install iputils-ping  
+    
+## 配置 DNS ##  
+
+    #我们可以在宿主机的 /etc/docker/daemon.json 文件中增加以下内容来设置全部容器的 DNS：
+    {
+      "dns" : [
+        "114.114.114.114",
+        "8.8.8.8"
+      ]
+    }
+    设置后，启动容器的 DNS 会自动配置为 114.114.114.114 和 8.8.8.8。
+    配置完，需要重启 docker 才能生效。
+    查看容器的 DNS 是否生效可以使用以下命令，它会输出容器的 DNS 信息：
+    $ docker run -it --rm  ubuntu  cat etc/resolv.conf
+    
+    如果只想在指定的容器设置 DNS，则可以使用以下命令：
+    $ docker run -it --rm -h host_ubuntu  --dns=114.114.114.114 --dns-search=test.com ubuntu  
+    
+    参数说明：
+
+    --rm：容器退出时自动清理容器内部的文件系统。
+    -h HOSTNAME 或者 --hostname=HOSTNAME： 设定容器的主机名，它会被写到容器内的 /etc/hostname 和 /etc/hosts。
+    --dns=IP_ADDRESS： 添加 DNS 服务器到容器的 /etc/resolv.conf 中，让容器用这个服务器来解析所有不在 /etc/hosts 中的主机名。
+    --dns-search=DOMAIN： 设定容器的搜索域，当设定搜索域为 .example.com 时，在搜索一个名为 host 的主机时，DN不仅搜索 host，还会搜索 host.example.com。
+    如果在容器启动时没有指定 --dns 和 --dns-search，Docker 会默认用宿主主机上的 /etc/resolv.conf 来配置容器的 DNS。
+
