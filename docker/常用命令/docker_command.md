@@ -27,7 +27,8 @@
         docker ps
         CONTAINER ID        IMAGE                  COMMAND              ...  
         5917eac21c36        ubuntu:15.10           "/bin/sh -c 'while t…"    ...
-    
+        
+        docker ps -l 查询最后一次创建的容器
     
 输出详情介绍：
 CONTAINER ID: 容器 ID。
@@ -48,9 +49,9 @@ PORTS: 容器的端口信息和使用的连接类型（tcp\udp）。
 NAMES: 自动分配的容器名称。  
 
 # 查看容器内的标准输出 #  
-
-    docker logs 2b1b7a428627
-    
+    #docker logs [ID或者名字] 
+    # -f: 让 docker logs 像使用 tail -f 一样来输出容器内部的标准输出
+    docker logs -f 2b1b7a428627
     docker logs amazing_cori
     
 # 停止docker #  
@@ -88,4 +89,30 @@ NAMES: 自动分配的容器名称。
     
 ## 删除容器 ##  
      docker rm -f 1e560fca3906  
+     
+# 运行一个web应用程序 #  
+
+     docker pull training/webapp  # 载入镜像
+     docker run -d -P training/webapp python app.py #-d:让容器在后台运行，-P:将容器内部使用的网络端口随机映射到我们使用的主机上  
+     
+     docker ps #查看正在运行的容器信息  
+     CONTAINER ID        IMAGE               COMMAND             ...        PORTS                 
+     d3d5e39ed9d3        training/webapp     "python app.py"     ...        0.0.0.0:32769->5000/tcp
+     #PORTS结果：Docker 开放了 5000 端口（默认 Python Flask 端口）映射到主机端口 32769 上  
+     #可以通过在浏览器localhost:32769访问该程序  
+     #也可以用docker port bf08b7f2cd89 或 docker port wizardly_chandrasekhar 来查看容器端口的映射情况
+     
+     #可以通过 -p 参数来设置不一样的端口：  
+     docker run -d -p 5000:5000 training/webapp python app.py   
+     
+     #使用 docker top 来查看容器内部运行的进程  
+     runoob@runoob:~$ docker top wizardly_chandrasekhar
+     UID     PID         PPID          ...       TIME                CMD
+     root    23245       23228         ...       00:00:00            python app.py  
+     
+     #查看docker的底层信息
+     docker inspect wizardly_chandrasekhar  
+     
+     
+     
      
