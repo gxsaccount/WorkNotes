@@ -837,3 +837,6 @@ Jenkins
  
  
  https://www.runoob.com/docker/docker-swarm.html
+ 
+ 
+ 现在都用k8s
