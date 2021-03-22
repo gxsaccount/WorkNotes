@@ -2,6 +2,7 @@
 from:
 https://tvm.apache.org/docs/tutorials/optimize/opt_gemm.html#sphx-glr-tutorials-optimize-opt-gemm-py
 tvm的gemm优化是这里的子集https://github.com/flame/how-to-optimize-gemm
+详细解释：https://github.com/gxsaccount/LanguageNotes/blob/master/%E7%BB%BC%E5%90%88/linux%E6%80%A7%E8%83%BD%E8%B0%83%E4%BC%98/cache_miss.md
 
 两种优化cpu上计算密集型任务的重要方法  
 1.增加cache命中率
