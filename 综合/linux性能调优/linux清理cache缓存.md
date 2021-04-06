@@ -3,6 +3,8 @@
 查看缓存：  
 free -m  
 输入运行下面一行：  
+
+操作系统时刻监控/proc/sys/vm/drop_caches文件，将3写入触发清空缓存，使用Inotify 进行监控
 echo 3 > /proc/sys/vm/drop_caches
 ![image](https://user-images.githubusercontent.com/20179983/113653678-e08e9b80-96c8-11eb-8ba9-5acf3c6476d5.png)
 
