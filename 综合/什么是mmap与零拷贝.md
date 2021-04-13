@@ -13,7 +13,7 @@
   ![image](https://user-images.githubusercontent.com/20179983/114532977-fb8c7d00-9c7f-11eb-8a4a-42261197dfca.png)
 
 # 零拷贝 #  
-零拷贝技术是指计算机执行操作时，CPU不需要先将数据从某处内存复制到另一个特定区域，这种技术通常用于通过网络传输文件时节省CPU周期和内存带宽。  
+减少cup拷贝。  
 
 常见的零拷贝技术
 ## mmap+write ##
