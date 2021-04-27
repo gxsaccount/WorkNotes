@@ -20,7 +20,8 @@
     };
     
 3.实现（简化）：从weak_ptr安全的生成一个自身的shared_ptr.
-
+    
+    mutable weak_ptr<_Ty> _Wptr;
     _NODISCARD shared_ptr<_Ty> shared_from_this() {
         return shared_ptr<_Ty>(_Wptr);
     }
