@@ -1,7 +1,9 @@
-# cudaMalloc  #  
-分配Pageable的host内存
-# cudaMallocHosts   #  
-cudaHostAlloc(), cudaFreeHost()来分配和释放pinned memory；
+# cudaMalloc #  
+分配显存内存  
+# malloc  #  
+分配host上Pageable的host内存
+# cudaMallocHosts  #    
+cudaHostAlloc(), cudaFreeHost()来分配和释放host上pinned memory；
 
 
 # host内存类别 #
