@@ -1,5 +1,12 @@
+https://developer.nvidia.com/blog/how-optimize-data-transfers-cuda-cc/  
+
 # cudaMalloc #  
 分配显存内存  
+
+# cuMemAllocPitch #   
+cuMemAllocPitch ( CUdeviceptr* dptr, size_t* pPitch, size_t WidthInBytes, size_t Height, unsigned int  ElementSizeBytes )
+Allocates pitched device memory.
+
 # malloc  #  
 分配host上Pageable的host内存
 # cudaMallocHosts  #    
