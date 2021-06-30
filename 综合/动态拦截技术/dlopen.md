@@ -53,7 +53,7 @@ void __attribute__((constructor)) x_init(void)
 void __attribute__((destructor)) x_fini(void)  
 构造函数会在dlopen()返回前或库被装载时调用。析构函数会在这样几种情况下被调用：dlclose()返回前，或main()返回后，或装载库过程中exit()被调用时。  
 
-# 实例 #  
+# 延迟加载实例 #  
 我们通过一个例子来讲解dlopen系列函数的使用和操作:  
 
 **主程序:**  
