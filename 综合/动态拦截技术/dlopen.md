@@ -184,4 +184,13 @@ clGetPlatformIDs= reinterpret_cast<clGetPlatformIDsFunc >(ptr);//强制转换成
         }
 ## 4.dlclose关闭库 ##
 
-正常库是不需要反复去打开和关闭的，而且库在进程结束时自动回关闭，因此实际应用过程中很少手动添加这一步。  
+正常库是不需要反复去打开和关闭的，而且库在进程结束时自动回关闭，因此实际应用过程中很少手动添加这一步。    
+
+    
+    
+# C++使用 #  
+extern "C"
+C++ has a special keyword to declare a function with C bindings: extern "C". A function declared as extern "C" uses the function name as symbol name, just as a C function. For that reason, only non-member functions can be declared as extern "C", and they cannot be overloaded.  
+    
+    https://tldp.org/HOWTO/html_single/C++-dlopen/
+ 
