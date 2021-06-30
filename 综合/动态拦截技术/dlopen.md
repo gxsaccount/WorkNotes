@@ -58,65 +58,74 @@ void __attribute__((destructor)) x_fini(void)
 
 **主程序:**  
 
-    #include <stdlib.h>
-    #include <dlfcn.h>
-    #include <stdio.h>
-
-    //申明结构体
-    typedef struct __test {
-        int i;
-        void (* echo_fun)(struct __test *p);
-    }Test;
-
-    //供动态库使用的注册函数
-    void __register(Test *p) {
-        p->i = 1;
-        p->echo_fun(p);
+    int add(int a,int b)
+    {
+        return (a + b);
     }
 
-    int main(void) {
+    int sub(int a, int b)
+    {
+        return (a - b);
+    }
 
-        void *handle = NULL;
-        char *myso = "./mylib.so";
+    int mul(int a, int b)
+    {
+        return (a * b);
+    }
 
-        if((handle = dlopen(myso, RTLD_NOW)) == NULL) {
-            printf("dlopen - %sn", dlerror());
-            exit(-1);
-        }
-
-        return 0;
+    int div(int a, int b)
+    {
+        return (a / b);
     }
 
 **动态库:**  
 
     #include <stdio.h>
     #include <stdlib.h>
+    #include <dlfcn.h>
 
-    //申明结构体类型
-    typedef struct __test {
-        int i;
-        void (*echo_fun)(struct __test *p);
-    }Test;
+    //动态链接库路径
+    #define LIB_CACULATE_PATH "./mylib.so"
 
-    //申明注册函数原型
-    void __register(Test *p);
+    //函数指针
+    typedef int (*CAC_FUNC)(int, int);
 
-    static void __printf(Test *p) {
-        printf("i = %dn", p->i);
-    }
+    int main()
+    {
+        void *handle;
+        char *error;
+        CAC_FUNC cac_func = NULL;
 
-    //动态库申请一个全局变量空间
-    //这种 ".成员"的赋值方式为c99标准
-    static Test config = {
-        .i = 0,
-        .echo_fun = __printf,
-    };
+        //打开动态链接库
+        handle = dlopen(LIB_CACULATE_PATH, RTLD_LAZY);
+        if (!handle) {
+        fprintf(stderr, "%s\n", dlerror());
+        exit(EXIT_FAILURE);
+        }
 
-    //加载动态库的自动初始化函数
-    void _init(void) {
-        printf("initn");
-        //调用主程序的注册函数
-        __register(&config);
+        //清除之前存在的错误
+        dlerror();
+
+        //获取一个函数
+        *(void **) (&cac_func) = dlsym(handle, "add");
+        if ((error = dlerror()) != NULL)  {
+        fprintf(stderr, "%s\n", error);
+        exit(EXIT_FAILURE);
+        }
+        printf("add: %d\n", (*cac_func)(2,7));
+
+        cac_func = (CAC_FUNC)dlsym(handle, "sub");
+        printf("sub: %d\n", cac_func(9,2));
+
+        cac_func = (CAC_FUNC)dlsym(handle, "mul");
+        printf("mul: %d\n", cac_func(3,2));
+
+        cac_func = (CAC_FUNC)dlsym(handle, "div");
+        printf("div: %d\n", cac_func(8,2));
+
+        //关闭动态链接库
+        dlclose(handle);
+        exit(EXIT_SUCCESS);
     }
 主程序编译: gcc test.c -ldl -rdynamic  
 动态库编译: gcc -shared -fPIC -nostartfiles -o mylib.so mylib.c  
