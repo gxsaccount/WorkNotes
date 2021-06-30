@@ -203,3 +203,7 @@ C++ has a special keyword to declare a function with C bindings: extern "C". A f
     
     https://tldp.org/HOWTO/html_single/C++-dlopen/
  
+
+    
+ # 更多 #  
+    https://jmpews.github.io/2016/12/27/pwn/linux%E8%BF%9B%E7%A8%8B%E5%8A%A8%E6%80%81so%E6%B3%A8%E5%85%A5/
