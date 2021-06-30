@@ -1,10 +1,21 @@
 # 接口介绍 #
 Linux提供了一套API来动态装载库。下面列出了这些API：  
 
-- dlopen，打开一个库，并为使用该库做些准备。  
-- dlsym，在打开的库中查找符号的值。  
-- dlclose，关闭库。  
-- dlerror，返回一个描述最后一次调用dlopen、dlsym，或dlclose的错误信息的字符串。  
+
+    #include <dlfcn.h>
+    void *dlopen(const char *filename, int flag);//打开库，返回动态库句柄
+    char *dlerror(void);//返回出现的错误
+    void *dlsym(void *handle, const char *symbol);//取函数,在打开的库中查找符号的值。
+    int dlclose(void *handle);//关闭库
+    
+    flags 参数必须包括以下两个值中的一个：
+    RTLD_LAZY：执行延迟绑定。只在有需要的时候解析符号
+    RTLD_NOW：dlopen()返回之前，将解析共享对象中的所有未定义符号。
+    flags 也可以通过以下零或多个值进行或运算设置：
+
+    RTLD_GLOBAL：此共享对象定义的符号将可用于后续加载的共享对象的符号解析。
+    RTLD_LOCAL：这与RTLD_GLOBAL相反，如果未指定任何标志，则为默认值。此共享对象中定义的符号不可用于解析后续加载的共享对象中的引用
+    当库被装入后，可以把 dlopen() 返回的句柄作为给dlsym()的第一个参数，以获得符号在库中的地址。使用这个地址，就可以获得库中特定函数的指针，并且调用装载库中的相应函数。
 
 C语言用户需要包含头文件dlfcn.h才能使用上述API。glibc还增加了两个POSIX标准中没有的API：  
 - dladdr，从函数指针解析符号名称和所在的文件。  
@@ -116,3 +127,61 @@ gcc参数 -rdynamic 用来通知链接器将所有符号添加到动态符号表
 gcc参数 -fPIC 作用: 当使用.so等类的库时,当遇到多个可执行文件共用这一个库时, 在内存中,这个库就不会被复制多份,让每个可执行文件一对一的使用,  
 而是让多个可执行文件指向一个库文件,达到共用. 宗旨:节省了内存空间,提高了空间利用率.  
 
+
+
+# 使用 #  
+## 1.dlopen()加载指定路径的SO ##
+
+    //加载指定路径的SO，成功返回库的句柄给调用进程，如果失败返回nullptr
+    void *handle = dlopen(path.c_str(), RTLD_LAZY | RTLD_LOCAL);
+      if (handle == nullptr) {
+        VLOG(2) << "Failed to load OpenCL library from path " << path
+                << " error code: " << dlerror();
+        return nullptr;
+      }
+      
+## 2.dlsym()取函数 ##    
+
+假如clGetPlatformIDs函数就是外部库中我需要调用的接口之一，通过  
+void *ptr = dlsym(handle, “clGetPlatformIDs”);返回这个函数对应的函数指针  
+clGetPlatformIDs= reinterpret_cast<clGetPlatformIDsFunc >(ptr);//强制转换成该函数指针  
+
+前面已经声明和定义了该函数指针：
+
+        using clGetPlatformIDsFunc = cl_int (*)(cl_uint, cl_platform_id *, cl_uint *);
+        clGetPlatformIDsFunc clGetPlatformIDs= nullptr；
+    
+        #define MACE_CL_ASSIGN_FROM_DLSYM(func)                          \
+          do {                                                           \
+            void *ptr = dlsym(handle, #func);                            \
+            if (ptr == nullptr) {                                        \
+              VLOG(1) << "Failed to load " << #func << " from " << path; \
+              continue;                                                  \
+            }                                                            \
+            func = reinterpret_cast<func##Func>(ptr);                    \
+            VLOG(2) << "Loaded " << #func << " from " << path;           \
+          } while (false)
+
+          MACE_CL_ASSIGN_FROM_DLSYM(clGetPlatformIDs);
+        ...
+        #undef MACE_CL_ASSIGN_FROM_DLSYM
+    
+    
+## 3.通过函数指针使用该接口 ##  
+
+在当前工程重新定义一个完全一样的函数，然后利用该函数去调用dlsym取出的接口。
+这样就可以在编译的时候不链接该SO，且编译能够通过。
+
+        cl_int clGetPlatformIDs(cl_uint num_entries,
+                               cl_platform_id *platforms,
+                               cl_uint *num_platforms) {
+          auto func = mace::runtime::OpenCLLibrary::Get()->clGetPlatformIDs;//获取取出的函数指针
+          if (func != nullptr) {
+            return func(num_entries, platforms, num_platforms);//使用该函数
+          } else {
+            return CL_INVALID_PLATFORM;
+          }
+        }
+## 4.dlclose关闭库 ##
+
+正常库是不需要反复去打开和关闭的，而且库在进程结束时自动回关闭，因此实际应用过程中很少手动添加这一步。  
