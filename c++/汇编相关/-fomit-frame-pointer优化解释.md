@@ -1,5 +1,7 @@
 https://blog.csdn.net/u013982161/article/details/51347944  
 
+总结：将函数做了内联优化  
+
 例子：  
 
     int foo ( int x )
