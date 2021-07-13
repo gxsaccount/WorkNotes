@@ -203,7 +203,17 @@ C++ has a special keyword to declare a function with C bindings: extern "C". A f
     
     https://tldp.org/HOWTO/html_single/C++-dlopen/
  
-
-    
+# 基本原理 #  
+https://datawine.github.io/2019/10/02/dlopen%E6%BA%90%E7%A0%81%E8%A7%A3%E6%9E%90/
+用一个link_map记录映射信息，调用函数_dl_map_object_from_fd，这个函数包括了    
+        
+        1.对link_map的二次查找，是否已经存在映射了.so文件的
+        2.提取ELF头文件信息（程序入口地址，头文件信息等）
+        3.对phdr（程序头表进行遍历），根据每个程序头的type类型做具体的操作
+        4.进行映射
+        5.调用mprotect修改内存权限
+        6.修改TLS等设置
+        7.修改符号表
  # 更多 #  
-    https://jmpews.github.io/2016/12/27/pwn/linux%E8%BF%9B%E7%A8%8B%E5%8A%A8%E6%80%81so%E6%B3%A8%E5%85%A5/
+    https://jmpews.github.io/2016/12/27/pwn/linux%E8%BF%9B%E7%A8%8B%E5%8A%A8%E6%80%81so%E6%B3%A8%E5%85%A5/  
+    https://datawine.github.io/2019/10/02/dlopen%E6%BA%90%E7%A0%81%E8%A7%A3%E6%9E%90/ 
