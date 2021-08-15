@@ -16,6 +16,8 @@ X86-64有16个64位寄存器，分别是：
     %r10，%r11 用作数据存储，遵循调用者使用规则，简单说就是使用之前要先保存原值
     
 另：
+![image](https://user-images.githubusercontent.com/20179983/129471005-939aa813-5297-4788-b2cd-044c9e44b733.png)
+
 ![image](https://user-images.githubusercontent.com/20179983/124875788-dfd51080-dffb-11eb-8230-cbceb1dec429.png)
 
     
