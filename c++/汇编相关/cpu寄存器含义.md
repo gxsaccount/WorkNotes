@@ -7,7 +7,7 @@
 
 ## 段寄存器 ##  
 
-cs寄存器：cpu在取指令时根据cs+eip来定位一个指令的内存地址  
+**cs寄存器：cpu在取指令时根据cs+eip来定位一个指令的内存地址**(程序可能会有多个代码段)  
 ss寄存器：进程标识自己的堆栈地址  
 
 ![image](https://user-images.githubusercontent.com/20179983/129471215-3f251b71-194a-4187-bf10-8ede05ddaead.png)
