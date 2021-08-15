@@ -13,14 +13,14 @@ ss寄存器：进程标识自己的堆栈地址
 ![image](https://user-images.githubusercontent.com/20179983/129471215-3f251b71-194a-4187-bf10-8ede05ddaead.png)
 
     
-![image](https://user-images.githubusercontent.com/20179983/124854792-7690d580-dfda-11eb-8f95-7d1108def8b2.png)
+
 
 ## 标志寄存器 ##  
 标识当前的一些状态   
 ![image](https://user-images.githubusercontent.com/20179983/129471371-65076d22-d1e4-4bb5-8997-d5987a76932f.png)  
 
 ## 64位寄存器 ##  
-机制基本和32，16相同，新增浮点数寄存器
+机制基本和32，16相同，新增浮点数寄存器  
 **X86-64有16个通用64位寄存器**  
 
     %rax，%rbx，%rcx，%rdx，%esi，%edi，%rbp，%rsp，%r8，%r9，%r10，%r11，%r12，%r13，%r14，%r15。
@@ -39,5 +39,5 @@ ss寄存器：进程标识自己的堆栈地址
 **Media/浮点寄存器**  
 浮点寄存器和Media：MMX*/FPR*  
 Media：XMM*
-
+![image](https://user-images.githubusercontent.com/20179983/124854792-7690d580-dfda-11eb-8f95-7d1108def8b2.png)
 ![image](https://user-images.githubusercontent.com/20179983/129471548-4fa269b4-8930-4c05-9d16-49d270e5bbc5.png)
