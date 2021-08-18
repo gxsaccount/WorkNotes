@@ -1,0 +1,39 @@
+流水线越长，频率可以越高，但功耗越高（？，目前15左右最合适）
+x86 一般传参只是用6个寄存器，超过6个直接push到栈中？
+r0 一般作为返回值
+ISA：instruction set architecture  =》 规定每条指令干啥 ，实现根据指令集实现有所不同
+指令流水线中 有数据依赖，inject  bubble（NOP）
+等待上一条指令的结果commit后，继续
+NOP= 啥也不干的指令
+fetch 从pc寄存器取指令
+数据在execute后已经可以使用了，但是没有协会寄存器，所以需要等待，但是 没有写回寄存器的data可以forward下一个指令的执行上（对他依赖的指令），以消除bubble 
+forward添加太多会增加硬件逻辑
+跳转指令也会影响流水线性能 ，跳转指令使得顺序的预取指令有可能不是下一条指令，需要清空重新取 
+添加指令预测单元，（甚至能预测指令执行后的结果）
+来消除跳转引起的bubble
+
+乱序执行（指令重排序）作用于execute（已经有600+的execute并行）
+将多个指令放在buffer中，乱序执行，然后顺序送入到commit
+通过有多个execute单元执行
+througput bound、latency bound
+x86复杂指令 会被拆成micro-ops
+
+寄存器重命名，write-after-read，write-after-write，  指令在同一个寄存器写，更换指令名字可以避免（没有数据依赖时？）
+commit时，会将指令使用的寄存器归还
+
+cpu在执行时，必须track所有的load和store，才能做优化  
+
+
+
+Rollback  
+回滚会需要知道回复的点，和回复现场，会需要耗费上百个指令？
+
+
+超标量（superscalar）CPU架构是指在一颗处理器内核中实行了指令级并行的一类并行运算。这种技术能够在相同的CPU主频下实现更高的CPU吞吐率（throughput）。
+超标量调度，superscalar scheduing  ，复杂且难scale
+issue width(W) ： 复杂度是 o(W^2),因为需要没两条指令间比较依赖  
+所以无法无脑增加issue width  
+
+ILP：指令级并行
+（好像已经被打脸m1芯片，630）
+https://www.zhihu.com/question/429951450/answer/1594985564
