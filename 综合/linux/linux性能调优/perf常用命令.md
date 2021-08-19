@@ -1,3 +1,5 @@
+https://man7.org/linux/man-pages/man1/perf.1.html  
+
 可以从以下三种事件为调优方向：  
 
 Hardware Event由PMU部件产生，在特定的条件下探测性能事件是否发生以及发生的次数。比如cache命中。  
