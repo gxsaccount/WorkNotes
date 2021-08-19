@@ -4,7 +4,7 @@ Hardware Event由PMU部件产生，在特定的条件下探测性能事件是否
 Software Event是内核产生的事件，分布在各个功能模块中，统计和操作系统相关性能事件。比如进程切换，tick数等。  
 Tracepoint Event是内核中静态tracepoint所触发的事件，这些tracepoint用来判断程序运行期间内核的行为细节（这些tracepint的对应的sysfs节点在/sys/kernel/debug/tracing/events目录下）。比如slab分配器的分配次数等。  
 
-#perf 的使用#
+# perf 的使用 #
 
 序号|命令|作用
 -|-|-
@@ -77,3 +77,11 @@ perf report
 perf diff [oldfile] [newfile]  
 
 
+# 运行时程序某一线程性能排查 #  
+1.获得程序进程号pid  
+2.gdb attach pid =>set logging file log.txt =>set logging on 
+3.在要分析的代码处打断点
+4.thread apply all bt  
+5.在log.txt中grep 断点的函数，获得线程号tid（linux的线程是轻量级线程，这里需要LWP的号码）
+6.sudo perf  record -g -a -p tid
+7.perf report 
