@@ -7,19 +7,21 @@
 https://blog.csdn.net/muaxi8/article/details/79627859?utm_medium=distribute.pc_relevant.none-task-blog-2%7Edefault%7EBlogCommendFromMachineLearnPai2%7Edefault-1.control&depth_1-utm_source=distribute.pc_relevant.none-task-blog-2%7Edefault%7EBlogCommendFromMachineLearnPai2%7Edefault-1.control
   
 # elf文件基本概念 #  
-elf文件是一种目标文件格式，用于定义不同类型目标文件以什么样的格式，都放了些什么东西。主要   用于linux平台。windows下是PE/COFF格式。        
+elf文件是一种目标文件格式，用于定义不同类型目标文件以什么样的格式，都放了些什么东西。主要用于linux平台。windows下是PE/COFF格式。        
 可执行文件、可重定位文件(.o)、共享目标文件(.so)、核心转储文件都是以elf文件格式存储的。  
 ELF文件组成部分：文件头、段表(section)、程序头  
 
 
-# elf文件结构 ---- 文件头 #  
+# elf文件结构 ---- 文件头 #   
+查看：readelf -h 文件 
 文件头数据结：  
 ![image](https://user-images.githubusercontent.com/20179983/125395082-45027a80-e3dd-11eb-87b9-be0cdaca8220.png)
 ccs中解析出来的文件头信息  
 ![image](https://user-images.githubusercontent.com/20179983/125395103-4f247900-e3dd-11eb-9871-81d4b27df6eb.png)
 
 
-从上图中可以看到，elf文件头定义了文件的整体属性信息，比较重要的几个属性是：魔术字，入口地址，程序头位置、长度和数量，文件头大小（52字节），段表位置、长度和 个数。  
+从上图中可以看到，elf文件头定义了文件的整体属性信息，比较重要的几个属性是：魔术字，**入口地址，程序头位置、长度和数量，文件头大小（52字节），段表位置、长度和 个数。**    
+![image](https://user-images.githubusercontent.com/20179983/130348478-2914daf3-00aa-49cd-bcbd-a450cb046bc8.png)
 
 # elf文件结构---段表 #  
 段表(section)数据结构  
@@ -37,7 +39,7 @@ ccs中解析出来的文件头信息
 【注】：所有以.开头的内容都被用于链接  
 
 # elf文件结构 ---- 程序头 #    
-在ELF中把权限相同、又连在一起的段(section)叫做segment，操作系统正是按照“segment”来映射可执行文件的。  
+在ELF中把权限相同、又连在一起的段(section)叫做segment，操作系统正是**按照“segment”来映射可执行文件的**。  
 描述这些“segment”的结构叫做程序头，它描述了elf文件该如何被操作系统映射到内存空间中。  
 程序头数据结构  
 ![image](https://user-images.githubusercontent.com/20179983/125395664-0d480280-e3de-11eb-87dc-fdb92c52a702.png)
@@ -54,6 +56,12 @@ ccs中解析出来的文件头信息
 
 # elf文件装载 #  
 ![image](https://user-images.githubusercontent.com/20179983/125395771-31a3df00-e3de-11eb-8ad4-50dc3dba6f5e.png)
+
+
+# 解析 #  
+当创建或增加一个进程映像的时候，系统在理论上将拷贝一个文件的段到一个虚拟的内存段：  
+
+
 
 # 代码实现 # 
   
