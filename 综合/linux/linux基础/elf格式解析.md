@@ -2,6 +2,8 @@
 1.readelf - display information about ELF files  
 
 # 结构分析 #  
+官方：http://www.muppetlabs.com/~breadbox/software/ELF.txt  
+
 https://blog.csdn.net/muaxi8/article/details/79627859?utm_medium=distribute.pc_relevant.none-task-blog-2%7Edefault%7EBlogCommendFromMachineLearnPai2%7Edefault-1.control&depth_1-utm_source=distribute.pc_relevant.none-task-blog-2%7Edefault%7EBlogCommendFromMachineLearnPai2%7Edefault-1.control
   
 # elf文件基本概念 #  
