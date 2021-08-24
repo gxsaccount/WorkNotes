@@ -170,20 +170,22 @@ execve和fork都是特殊一点的系统调用
 
     static  int  __init init_elf_binfmt( void )
     {
-        register_binfmt(&elf_format);// 注册
+        register_binfmt(&elf_format);// 注册elf_format到list_for_each_entry的list
          return  0;
     }
 
-elf_format 和 init_elf_binfmt，这里是不是就是**观察者模式中的观察者**,**search_binary_handler是被观察者**  
+elf_format 和 init_elf_binfmt，这里是**观察者模式中的观察者**,**search_binary_handler是被观察者**  
 
 
 2.sys_execve的内部处理过程
 
 装载和启动一个可执行程序依次调用以下函数：
 
-sys_execve() -> do_execve() -> do_execve_common() -> exec_binprm() -> search_binary_handler() -> load_elf_binary() -> start_thread()  
+sys_execve() -> do_execve() -> do_execve_common() -> exec_binprm() ->   
+**search_binary_handler**()打开文件的处理函数-> **list_for_each_entry**()寻找装载程序 -> load_binary=load_elf_binary()//加载处理函数 -> start_thread()    
 
-start_thread 的elf_entry对于静态链接就是
+**start_thread 的new_ip对于静态链接就是静态文件的elf_entry(main函数0x8048000之后附近的某一位置)  
+对于动态链接则是load_elf_interp(...)(即动态链接器的起点)，cpu将控制权交给ld来加载依赖库并完成动态链接**  
 
 3.使用gdb跟踪sys_execve内核函数的处理过程（见课后作业）
 
@@ -199,9 +201,47 @@ load_elf_binary ->  **start_thread**  start_thread:在中断时，将flag，ip�
 ![image](https://user-images.githubusercontent.com/20179983/130360235-25856ac2-7d9a-4527-b4c0-1e02138385dc.png)  
 
 5.浅析动态链接的可执行程序的装载
+    
+（1）可以关注ELF格式中的interp和dynamic,源码中**elf_entry = load_elf_interp(...)**。  
+（2）动态链接库的装载过程是一个广度优先的图的遍历。(linux加载可执行文件依赖的动态链接库，加载动态链接库继续加载它依赖的动态链接库)    
+（3）装载和连接之后ld将CPU的控制权交给可执行程序。（在动态库加载过程中，做了各种符号表等复杂的操作后，再将可执权移交可给可执行程序的入口，程序再从main开始执行）  
+（4）动态链接主要由libc的ld完成，实在用户态完成的  
 
-（1）可以关注ELF格式中的interp和dynamic。
 
-（2）动态链接库的装载过程是一个图的遍历。
-
-（3）装载和连接之后ld将CPU的控制权交给可执行程序。
+实例：  
+        //hello.c  
+        //gcc -o hello hello.c -m32 -static 
+        #include <stdio.h>  
+        int main(){
+            prinf("HELLO WORLD!\n");
+        }
+        
+        //test_exec.c  linux添加exec执行该文件  
+        #include <stdio.h>
+        #include <stdlib.h>
+        #include <unistd.h>
+        int main(int argc, char * argv[])
+        {
+            int pid;
+            /* fork another process */
+            pid = fork();
+            if (pid<0) // pid都是大于等于0的
+            { 
+                /* error occurred */
+                fprintf(stderr,"Fork Failed!");
+                exit(-1);
+            } 
+            else if (pid==0) // 子进程的返回值（eax寄存器保存）是0，所以子进程进入else if条件分支
+            {
+                /*  child process   */
+                execlp("/hello","hello",NULL);// 在子进程中加载指定的可执行文件
+            } 
+            else  // 父进程的返回值（eax寄存器保存）> 0，所以父进程进入else条件分之
+            { 
+                /*    parent process  */
+                /* parent will wait for the child to complete*/
+                wait(NULL);
+                printf("Child Complete!");
+                exit(0);
+            }
+        }
