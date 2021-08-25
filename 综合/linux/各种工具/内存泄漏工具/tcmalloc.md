@@ -5,3 +5,6 @@ https://blog.csdn.net/bqw2008/article/details/51439037
 
 
 https://zhuanlan.zhihu.com/p/135571086
+
+
+LD_PRELOAD=.\*/libtcmalloc.so HEAPCHECK=normal   
