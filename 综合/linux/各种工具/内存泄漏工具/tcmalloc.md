@@ -7,4 +7,5 @@ https://blog.csdn.net/bqw2008/article/details/51439037
 https://zhuanlan.zhihu.com/p/135571086
 
 
-LD_PRELOAD=.\*/libtcmalloc.so HEAPCHECK=normal   
+export PPROF_PATH=\*\*/gperftools-XX/src/pprof   
+LD_PRELOAD=\*\*/gperftools-XX/.libs/libtcmalloc.so HEAPCHECK=normal ./yourapp    
