@@ -207,13 +207,69 @@ C++ has a special keyword to declare a function with C bindings: extern "C". A f
 https://datawine.github.io/2019/10/02/dlopen%E6%BA%90%E7%A0%81%E8%A7%A3%E6%9E%90/
 用一个link_map记录映射信息，调用函数_dl_map_object_from_fd，这个函数包括了    
         
-        1.对link_map的二次查找，是否已经存在映射了.so文件的
-        2.提取ELF头文件信息（程序入口地址，头文件信息等）
-        3.对phdr（程序头表进行遍历），根据每个程序头的type类型做具体的操作
-        4.进行映射
-        5.调用mprotect修改内存权限
-        6.修改TLS等设置
-        7.修改符号表
+1.对link_map的二次查找，是否已经存在映射了.so文件的  
+2.提取ELF头文件信息（程序入口地址，头文件信息等）  
+3.对phdr（程序头表进行遍历），根据每个程序头的type类型做具体的操作  
+4.进行映射  
+
+        maplength = loadcmds[nloadcmds - 1].allocend - loadcmds[0].mapstart;
+
+        /* Now process the load commands and map segments into memory.
+           This is responsible for filling in:
+           l_map_start, l_map_end, l_addr, l_contiguous, l_text_end, l_phdr
+         */
+        errstring = _dl_map_segments (l, fd, header, type, loadcmds, nloadcmds,
+          maplength, has_holes, loader);
+
+5.调用mprotect修改内存权限  
+6.修改TLS等设置  
+7.修改符号表  
+    
+        /* Set up the symbol hash table.  */
+        _dl_setup_hash (l);
+8.最后，是_dl_map_segments函数   
+    
+        /* This is a position-independent shared object.  We can let the
+           kernel map it anywhere it likes, but we must have space for all
+           the segments in their specified positions relative to the first.
+           So we map the first segment without MAP_FIXED, but with its
+           extent increased to cover all the segments.  Then we remove
+           access from excess portion, and there is known sufficient space
+           there to remap from the later segments.
+
+           As a refinement, sometimes we have an address that we would
+           prefer to map such objects at; but this is only a preference,
+           the OS can do whatever it likes. */
+        ElfW(Addr) mappref
+          = (ELF_PREFERRED_ADDRESS (loader, maplength,
+                                    c->mapstart & GLRO(dl_use_load_bias))
+             - MAP_BASE_ADDR (l));
+
+        /* Remember which part of the address space this object uses.  */
+        l->l_map_start = (ElfW(Addr)) __mmap ((void *) mappref, maplength,
+                                              c->prot,
+                                              MAP_COPY|MAP_FILE,
+                                              fd, c->mapoff);
+        if (__glibc_unlikely ((void *) l->l_map_start == MAP_FAILED))
+          return DL_MAP_SEGMENTS_ERROR_MAP_SEGMENT;
+
+        l->l_map_end = l->l_map_start + maplength;
+        l->l_addr = l->l_map_start - c->mapstart;
+
+        if (has_holes)
+          /* Change protection on the excess portion to disallow all access;
+             the portions we do not remap later will be inaccessible as if
+             unallocated.  Then jump into the normal segment-mapping loop to
+             handle the portion of the segment past the end of the file
+             mapping.  */
+          __mprotect ((caddr_t) (l->l_addr + c->mapend),
+                      loadcmds[nloadcmds - 1].mapstart - c->mapend,
+                      PROT_NONE);
+
+        l->l_contiguous = 1;
+
+        goto postmap;
+                
  # 更多 #  
     https://jmpews.github.io/2016/12/27/pwn/linux%E8%BF%9B%E7%A8%8B%E5%8A%A8%E6%80%81so%E6%B3%A8%E5%85%A5/  
     https://datawine.github.io/2019/10/02/dlopen%E6%BA%90%E7%A0%81%E8%A7%A3%E6%9E%90/ 
