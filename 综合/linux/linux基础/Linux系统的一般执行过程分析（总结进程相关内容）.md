@@ -23,13 +23,13 @@
 
 五、Linux操作系统架构概览  
 1、操作系统的基本概念  
-![image](https://user-images.githubusercontent.com/20179983/131236413-bfe43892-02b9-41c0-b38a-ff0f4fcec251.png)
+![image](https://user-images.githubusercontent.com/20179983/131236413-bfe43892-02b9-41c0-b38a-ff0f4fcec251.png)  
 2、典型的Linux操作系统的结构  
-![image](https://user-images.githubusercontent.com/20179983/131236422-e3b43242-a412-4e10-b80d-82bfab669196.png)
+![image](https://user-images.githubusercontent.com/20179983/131236422-e3b43242-a412-4e10-b80d-82bfab669196.png)  
 六、最简单也是最复杂的操作---执行ls命令  
-![image](https://user-images.githubusercontent.com/20179983/131236430-61fca423-674a-43ab-86af-21a91f6b94ac.png)
+![image](https://user-images.githubusercontent.com/20179983/131236430-61fca423-674a-43ab-86af-21a91f6b94ac.png)  
 七、从CPU和内存的角度看Linux系统的执行    
-![image](https://user-images.githubusercontent.com/20179983/131236434-3c6e957c-cd11-4d1f-a6d7-39d25154287e.png)
+![image](https://user-images.githubusercontent.com/20179983/131236434-3c6e957c-cd11-4d1f-a6d7-39d25154287e.png)  
 0xc0000000以下是3G的部分，用户态。  
 （1）c=gets();系统调用，陷入内核态，将eip/esp/cs/ds等信息压栈。  
 （2）进程管理：等待键盘敲入指令。  
