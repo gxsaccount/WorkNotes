@@ -3,7 +3,7 @@
 。。。
 
 以VC6为例，VC10小区块的操作已经潜到操作系统  
-[main函数的前后操作]  
+https://github.com/gxsaccount/LanguageNotes/blob/master/c%2B%2B/%E5%86%85%E5%AD%98%E7%AE%A1%E7%90%86/img/main()%E5%87%BD%E6%95%B0%E5%89%8D%E5%90%8E%E6%93%8D%E4%BD%9C.png
 main()是c++的接入函数  
 mainCRTStartup():gcc也有类似操作，c runtime   
 _heap_init():  
