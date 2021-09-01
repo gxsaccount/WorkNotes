@@ -25,18 +25,24 @@ _ioinit():
 6.sbh_alloc_new_region():  
 开始分配内存。用于管理内存大概16k  
 7.sbh_alloc_new_group():  
+![image](https://user-images.githubusercontent.com/20179983/131616206-a2f6665c-8076-41e5-84fe-2073122be813.png)
 
 ![image](https://user-images.githubusercontent.com/20179983/131291599-3288c168-a7c9-430f-9907-c13d65b78359.png)
  
-**tagRegion:**  
+**pRegion所指向的结构tagRegion:**  
 size_t 表示当前正在使用的group  
 64个char
 bitvec是usigned int ，高位低位共32个，对应32个group，  
 每个bitvec长度为64对应group的64个链表，管理哪些区块是否存在链表中 ，bit位为1代表有内存挂在group里面，为0则没有   
+![image](https://user-images.githubusercontent.com/20179983/131616286-7714a784-b8de-477e-a688-e0ae3208ac39.png)
 
- 
+![image](https://user-images.githubusercontent.com/20179983/131616270-0b8b8a32-b05a-48b0-96e8-3ef1a8b4beee.png)
 
-**tagGroup：**  
+**grpHeadList**  
+
+grpHeadList就是32个group，**每个group负责32KB**  
+
+**tagGroup/group：**  
 cnt_Entries: 分配一次+1，释放一次-1，为0时可以将此块还给操作系统  
 有64个listhead组成双向链表  
 程序申请内存时  
@@ -91,6 +97,8 @@ cnt_Entries: 分配一次+1，释放一次-1，为0时可以将此块还给操�
 
 
 
+
+https://blog.csdn.net/qq_34269632/article/details/115704696
 
 
 
