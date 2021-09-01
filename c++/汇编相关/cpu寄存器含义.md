@@ -1,4 +1,4 @@
-# X86-64寄存器 #  
+# X86寄存器 #  
 
 ## 通用寄存器 ##  
 
@@ -41,3 +41,7 @@ ss寄存器：进程标识自己的堆栈地址
 Media：XMM*
 ![image](https://user-images.githubusercontent.com/20179983/124854792-7690d580-dfda-11eb-8f95-7d1108def8b2.png)
 ![image](https://user-images.githubusercontent.com/20179983/129471548-4fa269b4-8930-4c05-9d16-49d270e5bbc5.png)
+
+## x84-64位寄存器 ##
+在64位模式下：处理器把CS/DS/ES/SS的段基都当作0，忽略与之关联的段描述符中的段基地址。  
+因为在64位模式中，CPU可以访问所有可寻址的内存空间。今天大多数的64位CPU只需要访问40位到48位的物理内存，因此不再需要段寄存器去扩展。  
