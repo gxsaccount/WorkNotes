@@ -8,8 +8,9 @@
 main()是c++的接入函数  
 mainCRTStartup():gcc也有类似操作，c runtime   
 _heap_init():  
-crt_heap:先要4096的堆大小初始化crt_heap，后续不够继续加  
-sbh_heap:再初始化16个sbh_heap的Header，用来做内存管理(crt_heap)      
+ 
+   crt_heap:先要4096的堆大小初始化crt_heap，后续不够继续加  
+   sbh_heap:再初始化16个sbh_heap的Header，用来做内存管理(crt_heap)      
 ![image](https://user-images.githubusercontent.com/20179983/131291562-f9d6bbbb-f68b-48e2-9d13-5aafa0c66e4d.png)
 _ioinit():  
 1.根据dbg与否，来选择用malloc或是malloc_dbg  
