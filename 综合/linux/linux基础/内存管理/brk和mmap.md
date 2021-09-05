@@ -79,8 +79,7 @@ mmap申请大块（>128k）内存,匿名文件映射区
        当最高地址空间的空闲内存超过128K（可由M_TRIM_THRESHOLD选项调节）时，执行内存紧缩操作（trim）。在上一个步骤free的时候，发现最高地址空闲内存超过128K，于是内存紧缩，变成图9所示。  
 ![image](https://user-images.githubusercontent.com/20179983/132121492-5aaeb7c7-98e9-4ffb-b2a8-a7cb62c10015.png)
 
-![image](https://user-images.githubusercontent.com/20179983/132121430-5e71baa7-b916-4290-977e-5422730e2098.png)
-
+![image](https://user-images.githubusercontent.com/20179983/132121603-e511c90a-ca4a-4747-ad7a-647dbcbddb05.png)
 mmap调用核心源码：  
 
       SYSCALL_DEFINE6(mmap_pgoff, unsigned long, addr, unsigned long, len,
