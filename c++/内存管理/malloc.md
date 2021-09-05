@@ -3,7 +3,7 @@
 2.malloc/free会导致系统用户态/核心态切换，消耗大。  
 3.malloc/free线程安全意味着他要加锁，那么你会看到任务管理器里cpu锯齿形状。  
 4.不断的malloc/free运行久了会内存碎片。当然现在64位系统地址空间够大，要求不是很苛刻的话问题不大  
-
+5.ptmalloc是glic的malloc实现，tcmalloc和jemallo是google的实现  
 ## 程序启动前的流程 ##
 **malloc本质是分段管理，段页结合进行和操作系统一起管理内存**  
 分段可以更方便的归还内存，
