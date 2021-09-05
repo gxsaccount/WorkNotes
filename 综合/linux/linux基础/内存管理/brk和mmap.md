@@ -1,6 +1,6 @@
 ![image](https://user-images.githubusercontent.com/20179983/132117659-38b5659f-0573-4d8d-b3d9-a6ad748adb5a.png)
 
-
+![image](https://user-images.githubusercontent.com/20179983/132118138-172e9679-60c7-4814-9746-ce0dd4951579.png)
 
 brk  
 brk系统调用，扩大或缩小进程堆空间。将数据段.data的最高地址指针_edata往高地址推；只分配虚拟空间，不映射物理内存。第一次读、写数据时，引起内核**缺页中断**，然后虚拟地址空间建立映射关系。  
@@ -9,7 +9,7 @@ brk系统调用，扩大或缩小进程堆空间。将数据段.data的最高地
 进程调用B=malloc(40K)以后，内存空间如图3。  
 ![image](https://user-images.githubusercontent.com/20179983/132121320-91a1a1b5-1b1a-414c-9980-9091d0c73f17.png)
 
-![image](https://user-images.githubusercontent.com/20179983/132118138-172e9679-60c7-4814-9746-ce0dd4951579.png)
+
 brk系统调用源码：  
       
       https://elixir.bootlin.com/linux/v4.20.17/source/include/linux/mm_types.h#L416
