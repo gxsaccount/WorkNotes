@@ -1,2 +1,30 @@
-https://blog.csdn.net/u012142460/article/details/107433754  
-==》  https://zhuanlan.zhihu.com/p/73562347
+https://zhuanlan.zhihu.com/p/73562347  
+https://blog.csdn.net/u012142460/article/details/107433754    
+https://zhuanlan.zhihu.com/p/105589621
+# 原理 #   
+buddy分配系统在普通内存池的基础上，允许两个大小相同且相邻的内存块合并，合并之后的内存块的「尺寸」增大，因而将被移动到另一个内存池的free list上。  
+来看下面这个例子，  
+内存共有1024字节，  
+由32, 64, 128, 256, 512字节为「尺寸」的5个free list组织起来，最小分配单位为32字节（对应位图中的1个bit）。  
+假设现在0到448字节的内存已使用，448到1024字节的内存为空闲（字母编号从A开始，表示分配顺序）。     
+
+![image](https://user-images.githubusercontent.com/20179983/132301800-d39526d4-2e3e-43a5-a649-0438fe159168.png)
+
+
+现在我们要申请128字节的内存，那么首先应该查看「尺寸」为128字节的free list，但很可惜没有，那再看看256字节的free list，还是没有，只能再往上找，到512字节的free list这儿，终于有了一个空闲的内存块A'。  
+那么将A'划分为256字节的E和E'，再将内存块E划分成128字节的F和F'，内存块F即是我们需要的内存。之后，在此过程中产生的E'和F'将分别被挂接到「尺寸」为256字节和128字节的free list上，位图中bits的值也会相应变化。  
+
+![image](https://user-images.githubusercontent.com/20179983/132301970-1adb5392-5fe4-40e3-a2d9-e7b9ede32756.png)
+
+接下来释放128字节的内存块C，由于C相邻的两个内存块都不是空闲状态，因此不能合并，之后C也将被挂接到「尺寸」为128字节的free list上。  
+
+![image](https://user-images.githubusercontent.com/20179983/132302017-de5a5e43-de68-4165-942a-247847c4be3a.png)
+然后释放64字节的内存块D，分配器根据位图可知，右侧的D'也是空闲的，且D和D'的大小相同，因此D和D'将合并。按理合并后的空闲内存块C'为128字节，应该被添加到「尺寸」为128字节的free list上，但因为左侧的C也是空闲的，且C和C'的大小相同，因此C和C'还将合并形成B'，合并后的空闲内存块将被挂接到「尺寸」为256字节的free list上。  
+
+![image](https://user-images.githubusercontent.com/20179983/132302076-b8d2ff07-1778-4a01-9a4b-d5588fe4ae50.png)
+
+在buddy分配系统中，从物理上，内存块按地址从小到大排列；从逻辑上，内存块通过free list组织。通过对相邻内存块的合并，增加了内存使用的灵活性，减少了内存碎片。  
+
+但是实现合并有一个前提，就是内存块的尺寸必须是2的幂次方（称为"order"），这也是buddy系统划分内存块的依据。此外，每次内存释放都要查找左右的buddy是否可以合并，还可能需要在free list之间移动，也是一笔不小的开销。  
+
+# 实现 #  
