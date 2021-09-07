@@ -28,7 +28,7 @@ buddy分配系统在普通内存池的基础上，允许两个大小相同且相
 但是实现合并有一个前提，就是内存块的尺寸必须是2的幂次方（称为"order"），这也是buddy系统划分内存块的依据。此外，每次内存释放都要查找左右的buddy是否可以合并，还可能需要在free list之间移动，也是一笔不小的开销。  
 
 # 实现 #  
-Linux中物理内存分配的最小粒度为page frame，而属性相同的page被划分到了同一个zone中。  
+**Linux中物理内存分配的最小粒度为page frame，而属性相同的page被划分到了同一个zone中**。    
 在"struct zone"的定义中，包含了一个"struct free_area"的数组（代码位于"/include/linux/mmzone.h"），这个数组就是用于实现buddy系统的。  
 
     struct zone {
@@ -40,7 +40,7 @@ Linux中物理内存分配的最小粒度为page frame，而属性相同的page�
     #define MAX_ORDER 11
     #define MAX_ORDER_NR_PAGES (1 << (MAX_ORDER - 1))
     
-"MAX_ORDER"的值默认为11，一次分配可以请求的page frame数目为1, 2, 4……最大为1024。  
+"MAX_ORDER"的值默认为11，一次分配可以请求的page frame数目为1, 2, 4……最大为1024，**即order越大，page frame的空间越大**。    
 
 ## 复合页 ##  
 如果"order"的值大于0，那么同一个free list中的一个节点上的page frames不只一个，它们构成了一个"compound pages"，其中的第一个page frame被称为"head page"（如下图蓝色部分所示），其余的page frame被称为"tail page"（如下图黄色部分所示）。  
@@ -143,7 +143,7 @@ void free_pages(unsigned long addr, unsigned int order)
 
   Buddy = 8 ^ (1 << 1) = 8 ^ 2 = 10  
   
-要成为buddy，除了两者的大小（即order）相同，还必须属于同一个zone。  
+**要成为buddy，除了两者的大小（即order）相同，还必须属于同一个zone。**  
 Buddy系统是以page frame为粒度分配的，这并不能直接满足Linux的应用需求，下文要介绍的slab分配器将可以实现更小粒度的内存分配。  
 
 
