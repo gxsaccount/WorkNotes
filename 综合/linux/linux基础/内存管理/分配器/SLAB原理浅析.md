@@ -22,6 +22,7 @@ SLAB着色是一种尝试使不同SLAB中的对象使用CPU硬件缓存中不同
 通过这种方案，原本被浪费掉的空间可以实现一项新功能。  
 
 通过命令sudo cat /proc/slabinfo可查看系统当前 slab 使用情况。以vm_area_struct结构体为例，当前系统已分配了 13014 个vm_area_struct缓存，每个大小为 216 字节，其中 active 的有 12392 个。  
+      
         [root@VM-8-9-centos]# cat /proc/slabinfo
         slabinfo - version: 2.1
         # name            <active_objs> <num_objs> <objsize> <objperslab> <pagesperslab> : tunables <limit> <batchcount> <sharedfactor> : slabdata <active_slabs> <num_slabs> <sharedavail>
