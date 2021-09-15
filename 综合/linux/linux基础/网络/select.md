@@ -13,6 +13,7 @@ select/poll/epoll用法
 使用：  
 ![image](https://user-images.githubusercontent.com/20179983/133450469-ec816361-66cc-4787-98bb-846da41efc22.png)
 
+![image](https://user-images.githubusercontent.com/20179983/133456081-7e739673-5337-401a-9f52-1a8a47123e2a.png)
 
     #include <stdio.h>
     #include <stdlib.h>
