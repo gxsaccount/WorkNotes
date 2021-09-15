@@ -1,16 +1,20 @@
 1.基本使用  
-int epoll_create(int size);
-int epoll_ctl(int epfd, int op, int fd, struct epoll_event *event);
-int epoll_wait(int epfd, struct epoll_event *events,int maxevents, int timeout);
-首先调用epoll_create建立一个epoll fd。参数size是内核保证能够正确处理的最大文件描述符数目（现在内核使用红黑树组织epoll相关数据结构，不再使用这个参数）。  
-epoll_ctl可以操作上面建立的epoll fd，例如，将刚建立的socket fd加入到epoll中让其监控，或者把 epoll正在监控的某个socket fd移出epoll，不再监控它等等。  
+int epoll_create(int size);  
+int epoll_ctl(int epfd, int op, int fd, struct epoll_event *event);  
+int epoll_wait(int epfd, struct epoll_event *events,int maxevents, int timeout);  
+首先调用epoll_create建立一个epoll fd。参数size是内核保证能够正确处理的最大文件描述符数目（现在内核使用红黑树组织epoll相关数据结构，不再使用这个参数）。    
+epoll_ctl可以操作上面建立的epoll fd，例如，将刚建立的socket fd加入到epoll中让其监控，或者把 epoll正在监控的某个socket fd移出epoll，不再监控它等等。    
 epoll_wait在调用时，在给定的timeout时间内，当在监控的这些文件描述符中的某些文件描述符上有事件发生时，就返回用户态的进程。    
 另：用epoll和select监听普通文件会报错，因为文件一直可以写一直可读。一般使用stdin,socket,pipe,timefd...  
-linux对文件的操作做了很高层的抽象vfs，它并不知道每种具体的文件(如NTFS，FAT32，EXT4等)应该怎么打开，读写，linux让每种设备自定义struct file_operations结构体的各种函数  
+linux对文件的操作做了很高层的抽象vfs，它并不知道每种具体的文件(如NTFS，FAT32，EXT4等)应该怎么打开，读写，linux让每种设备自定义struct   file_operations结构体的各种函数    
 
-poll函数常见作用：  
-将当前线程（task）加入到设备驱动等队列，并设置回调函数。这样设备发生时才知道唤醒哪些线程，调用这些线程什么方法  
-检查此刻已经发生的事件，POLLIN，POLLOUT，POLLERR等，以掩码形式返回  
+poll函数常见作用：    
+将当前线程（task）加入到设备驱动等队列，并设置回调函数。这样设备发生时才知道唤醒哪些线程，调用这些线程什么方法    
+检查此刻已经发生的事件，POLLIN，POLLOUT，POLLERR等，以掩码形式返回    
+
+
+等待队列：  
+![image](https://user-images.githubusercontent.com/20179983/133466420-96850c9d-2b48-422a-b0e0-b4cf03908917.png)
 
 
      1518 struct file_operations {
