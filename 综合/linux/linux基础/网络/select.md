@@ -11,6 +11,10 @@ select/poll/epoll用法
     }
 
 使用：  
+1.告诉内核你对哪些fd感兴趣  
+2.内核将遍历这些fd，将准备就绪的bitmap返还给你  
+3.你遍历这些bitmap得到就绪的fd  
+
 ![image](https://user-images.githubusercontent.com/20179983/133450469-ec816361-66cc-4787-98bb-846da41efc22.png)
 
 ![image](https://user-images.githubusercontent.com/20179983/133456081-7e739673-5337-401a-9f52-1a8a47123e2a.png)
@@ -139,7 +143,7 @@ select对应的系统调用如下
     int do_select(int n, fd_set_bits *fds, struct timespec *end_time)
     {
         for (;;) {
-            /* 遍历所有监听的文件描述符，省略部分代码，如long为0时可以直接跳过 */
+            /* 遍历所有监听的文件描述符， */
           for (i = 0; i < n; ++rinp, ++routp, ++rexp)
             {
                 //
@@ -174,6 +178,7 @@ select对应的系统调用如下
             poll_schedule_timeout(&table, TASK_INTERRUPTIBLE, to, slack);
         }
     }
+    
 do_select会遍历所有要监听的文件描述符，调用对应驱动程序的poll函数，驱动程序的poll一般实现如下
 
     static unsigned int button_poll(struct file *fp, poll_table * wait)
