@@ -14,6 +14,7 @@ poll函数常见作用：
 
 
 等待队列：  
+双向循环链表  
 ![image](https://user-images.githubusercontent.com/20179983/133466420-96850c9d-2b48-422a-b0e0-b4cf03908917.png)
 
 
