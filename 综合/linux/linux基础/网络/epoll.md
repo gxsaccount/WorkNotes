@@ -24,14 +24,19 @@ linux对文件的操作做了很高层的抽象vfs，它并不知道每种具体
      
   **只有实现了poll接口的文件才能使用select和epoll**   
 poll函数常见作用：    
-将当前线程（task）加入到设备驱动等队列，并设置回调函数。这样设备发生时才知道唤醒哪些线程，调用这些线程什么方法    
+将当前线程（task）**睡眠**并加入到设备驱动等队列，**并设置回调函数**，这样设备发生时才知道唤醒哪些线程，调用这些线程什么方法    
+当有事件、数据来唤醒task时，就会继续执行，将自己移除等待队列，放入readlist。  
 检查此刻已经发生的事件，POLLIN，POLLOUT，POLLERR等，以掩码形式返回    
 
 
 ## 等待队列： ##  
 双向循环链表实现    
+
+
+
 ![image](https://user-images.githubusercontent.com/20179983/133466420-96850c9d-2b48-422a-b0e0-b4cf03908917.png)
 
+## epoll_wait ##   
 **调用epoll_wait时，entry中的private被加入task_struct(有栈帧和ip等context保存，激活后可以继续执行),这里的private即为wait_queue**   
 epoll_wait是的task_struct对应的线程让出cpu  
 
@@ -75,7 +80,7 @@ task==task_struct
 
 ## epoll create ##  
 ![image](https://user-images.githubusercontent.com/20179983/133642435-775679a2-2e46-4fe9-9083-7f025827a660.png)
-epoll create 主要创建这个struct  
+epoll create 主要创建这个struct，fd，  
 ![image](https://user-images.githubusercontent.com/20179983/133642515-51bb18f1-f695-46f6-aacb-53ae4529816d.png)
 
 操作系统的fd有上限，需要用get——unused——fd——flags获得  
@@ -83,98 +88,18 @@ epoll create 主要创建这个struct
 ![image](https://user-images.githubusercontent.com/20179983/133643209-91d02e72-bdba-4e0e-8606-898e53bbd8cd.png)
 ## epoll contral ## 
 ### add ###     
-将fd添加到关注列表（加入到红黑树中），同时设置一些回调函数  
-从private中找到epi，加入红黑树中  
+**将fd添加到关注列表（加入到红黑树中），同时设置一些回调函数**  
+**从private中找到epi，加入红黑树中**  
 ![image](https://user-images.githubusercontent.com/20179983/133643250-3e2631d9-35d9-4f94-b129-472a0dd75db3.png)
 
   
   
-    #define MAXLINE  1024
-    #define OPEN_MAX  16 //一些系统会定义这些宏
-    #define SERV_PORT  10001
 
-    int main()
-    {
-        int i , maxi ,listenfd , connfd , sockfd ,epfd, nfds;
-        int n;
-        char buf[MAXLINE];
-        struct epoll_event ev, events[20];  
-        socklen_t clilen;
-        struct pollfd client[OPEN_MAX];
 
-        struct sockaddr_in cliaddr , servaddr;
-        listenfd = socket(AF_INET , SOCK_STREAM , 0);
-        memset(&servaddr,0,sizeof(servaddr));
-        servaddr.sin_family = AF_INET;
-        servaddr.sin_port = htons(SERV_PORT);
-        servaddr.sin_addr.s_addr = htonl(INADDR_ANY);
 
-        bind(listenfd , (struct sockaddr *) & servaddr, sizeof(servaddr));
-        listen(listenfd,10);
-        
-        //******
-        epfd = epoll_create(256);
-        ev.data.fd=listenfd; 
-        ev.events=EPOLLIN|EPOLLET;
-        //******
-        epoll_ctl(epfd,EPOLL_CTL_ADD,listenfd,&ev);
+## 水平触发，边缘触发 ##   
+linux通知你有event，要是处理不完  
+水平触发：处理不完的再通知   
+边缘触发：有新的数据再通知  
 
-        for(;;)
-        {
-            //******nfds有几个事件时准备好了的，他们放在了events前nfds个位置  
-            nfds=epoll_wait(epfd,events,20,500); 
-            for(i=0; i<nfds; i++)
-            {
-                //找到可以处理的fd对其进行处理（优化这段时手段见reactor），单机100W链接指一瞬间建立好连接，同一时间一般处理几千个事件
-                if (listenfd == events[i].data.fd)
-                {
-                    clilen = sizeof(cliaddr);
-                    //处理新请求
-                    connfd = accept(listenfd , (struct sockaddr *)&cliaddr, &clilen);
-                    if(connfd < 0)  
-                    {  
-                        perror("connfd < 0");  
-                        exit(1);  
-                    }
-                    ev.data.fd=connfd; 
-                    ev.events=EPOLLIN|EPOLLET;
-                    
-                    epoll_ctl(epfd,EPOLL_CTL_ADD,connfd,&ev);                
-                }
-                else if (events[i].events & EPOLLIN)
-                {
-                    if ( (sockfd = events[i].data.fd) < 0)  
-                        continue;  
-                    n = recv(sockfd,buf,MAXLINE,0);
-                    if (n <= 0)   
-                    {    
-                        close(sockfd);  
-                        events[i].data.fd = -1;  
-                    }
-                    else
-                    {
-                        buf[n]='\0';
-                        printf("Socket %d said : %s\n",sockfd,buf);
-                        ev.data.fd=sockfd; 
-                        ev.events=EPOLLOUT|EPOLLET;
-                        epoll_ctl(epfd,EPOLL_CTL_MOD,connfd,&ev);
-                    }
-                }
-                else if( events[i].events&EPOLLOUT )
-                {
-                    sockfd = events[i].data.fd;  
-                    send(sockfd, "Hello!", 7, 0);  
 
-                    ev.data.fd=sockfd;  
-                    ev.events=EPOLLIN|EPOLLET;  
-                    epoll_ctl(epfd,EPOLL_CTL_MOD,sockfd,&ev); 
-                }
-                else 
-                {
-                    printf("This is not avaible!");
-                }
-            }
-        }
-        close(epfd);  
-        return 0;
-    }
