@@ -1,4 +1,5 @@
-https://www.cnblogs.com/xuewangkai/p/11158576.html  
+https://www.cnblogs.com/xuewangkai/p/11158576.html    
+http://www.pandademo.com/2016/11/linux-kernel-epoll-source-dissect/
 1.基本使用  
           int epoll_create(int size);  
           int epoll_ctl(int epfd, int op, int fd, struct epoll_event *event);  
