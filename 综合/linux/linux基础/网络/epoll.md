@@ -1,3 +1,4 @@
+https://www.cnblogs.com/xuewangkai/p/11158576.html  
 1.基本使用  
           int epoll_create(int size);  
           int epoll_ctl(int epfd, int op, int fd, struct epoll_event *event);  
