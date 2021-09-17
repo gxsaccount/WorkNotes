@@ -157,3 +157,10 @@ current:当前再调用task_strcut的进程
 4.将自己移除等待队列，并将状态改为TASK_RUNNIING  
 
 
+非阻塞：  
+![image](https://user-images.githubusercontent.com/20179983/133806309-132d9ec9-d0c7-4a9c-a959-3b7ea7cafd88.png)
+
+//扫描readlist，做拷贝
+![image](https://user-images.githubusercontent.com/20179983/133806363-52b3b7ef-0d03-4a8d-acd8-75050fc54d71.png)  
+
+
