@@ -31,6 +31,9 @@ poll函数常见作用：
 检查此刻已经发生的事件，POLLIN，POLLOUT，POLLERR等，以掩码形式返回    
 
 
+
+
+
 ## 等待队列： ##  
 双向循环链表实现    
 
@@ -162,5 +165,20 @@ current:当前再调用task_strcut的进程
 
 //扫描readlist，做拷贝
 ![image](https://user-images.githubusercontent.com/20179983/133806363-52b3b7ef-0d03-4a8d-acd8-75050fc54d71.png)  
+
+
+
+
+epoll中的两个等待队列  
+以socket举例  
+![image](https://user-images.githubusercontent.com/20179983/133956471-bab20cd1-1123-4666-8282-255a33a15f64.png)  
+envent-poll的等待队列：进程在等待事件发生来唤醒（socket，stdin，管道...）    
+设备的等待队列：socket的等待队列有事件发生，会唤醒enent-poll（envent-callback）中的事件(epoll_ctl注册)   
+
+事件先加入socket的等待队列（带有回调函数、epoll/select回调函数）   
+再加入envent-poll的等待队列  
+
+
+select和epoll的区别之一是在socket的回调函数不一样  
 
 
