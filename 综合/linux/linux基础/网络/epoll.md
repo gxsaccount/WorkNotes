@@ -132,6 +132,8 @@ epitem表示一个被监听的fd
               int maxevents;
               struct epoll_event __user *events;
           };
+https://www.cnblogs.com/zengyiwen/p/7213f3303eca4bb08fd270f7d5772100.html  
+
 https://www.cnblogs.com/xuewangkai/p/11158576.html    
 http://www.pandademo.com/2016/11/linux-kernel-epoll-source-dissect/
 1.基本使用  
