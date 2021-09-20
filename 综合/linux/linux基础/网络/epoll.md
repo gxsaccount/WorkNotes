@@ -1,3 +1,4 @@
+http://news.16p.com/842984.html
 # 铺垫 #    
 ## 等待队列 ##    
  * 队列头(wait_queue_head_t)往往是资源生产者,    
