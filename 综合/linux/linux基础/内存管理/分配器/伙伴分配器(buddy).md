@@ -69,7 +69,7 @@ buddy分配系统在普通内存池的基础上，允许两个大小相同且相
 加之"struct page"中的「位域」也是在不断演进和变化中，因此本文就不展开讲解这块了，需要深入了解的请参考文末的两个链接。  
 
 ## 迁移类型 - pageblock ##  
-每个"free_area"包含不只一个free list，而是一个free list数组（形成二维数组），包含了多种"migrate type"，以便将具有相同「迁移类型」的page frame尽可能地分组（同一类型的所有order的free list构成一组"pageblocks"），这样可以使包括memory compaction在内的一些操作更加高效。  
+**每个"free_area"包含不只一个free list，而是一个free list数组（形成二维数组），包含了多种"migrate type"，以便将具有相同「迁移类型」的page frame尽可能地分组（同一类型的所有order的free list构成一组"pageblocks"），这样可以使包括memory compaction在内的一些操作更加高效**。  
 
     struct free_area {
         struct list_head    free_list[MIGRATE_TYPES];
