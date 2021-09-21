@@ -1,6 +1,11 @@
 https://zhuanlan.zhihu.com/p/73562347  
 https://blog.csdn.net/u012142460/article/details/107433754    
-https://zhuanlan.zhihu.com/p/105589621
+https://zhuanlan.zhihu.com/p/105589621  
+# 伙伴定义 #  
+* 两个内存大小相同  
+* 两个内存地址连续
+* 两个内存从同一块大内存分离出来  
+
 # 原理 #   
 buddy分配系统在普通内存池的基础上，允许两个大小相同且相邻的内存块合并，合并之后的内存块的「尺寸」增大，因而将被移动到另一个内存池的free list上。  
 来看下面这个例子，  
