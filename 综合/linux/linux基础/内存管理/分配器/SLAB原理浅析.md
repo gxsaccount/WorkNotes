@@ -24,7 +24,6 @@ SLAB分配器的最后一项任务是提高CPU硬件缓存的利用率。
 SLAB着色是一种尝试使不同SLAB中的对象使用CPU硬件缓存中不同行的方案。  
 通过将对象放置在SLAB中的不同起始偏移处，对象可能会在CPU缓存中使用不同的行，从而有助于**确保来自同一SLAB缓存的对象不太可能相互刷新**。  
 通过这种方案，原本被浪费掉的空间可以实现一项新功能。  
-![image](https://user-images.githubusercontent.com/20179983/134143052-bf7e4a9f-77d4-4778-903e-6df68ec267fe.png)
 
 ![image](https://user-images.githubusercontent.com/20179983/134142932-0c8d1918-8435-492c-9534-e56b5481f4df.png)
 ![image](https://user-images.githubusercontent.com/20179983/134143236-93026790-5984-4f1f-aa00-0f0ba11b3c39.png)
@@ -66,6 +65,7 @@ SLAB着色是一种尝试使不同SLAB中的对象使用CPU硬件缓存中不同
 通用 slab 会造成内存浪费：出于 slab 管理的方便，每个 slab 管理的对象大小都是一致的，当我们需要分配一个处于 64-96字节中间大小的对象时，就必须从保存 96 字节的 slab 中分配。而对于专用的 slab，其管理的都是同一个结构体实例，申请一个就给一个恰好内存大小的对象，这就可以充分利用空间。   
 
 # slab分配 #
+![image](https://user-images.githubusercontent.com/20179983/134144228-20d3bbe8-8f8b-440e-80b1-417267de061d.png)
 
 ## slab分配器接口 ##  
 Slab 分配器提供的 API 为 kmalloc()和 kfree()。kmalloc()函数定义在include/linux/slab.h文件中，接收两个参数，并调用__kmalloc()函数。最终分配内存的实现是__do_kmalloc()函数。  
@@ -100,7 +100,40 @@ Slab 分配器提供的 API 为 kmalloc()和 kfree()。kmalloc()函数定义在i
       void kmem_cache_alloc(struct kmem_cache *s, gfp_t flags);
 
       # 释放缓存对象 #
-      void kmem_cache_free(struct kmem_cache *s, void *x)
+      void kmem_cache_free(struct kmem_cache *s, void *x)  
+
+## slab描述符 ##  
+由于slab的缓存特性，slab 分配器从 buddy 分配器中获取的物理内存称为 内存缓存（与 CPU 的硬件缓存进行区别，下文都称为缓存），  
+使用结构体struct kmem_cache（定义在include/linux/slab_def.h文件中）描述。  
+
+      struct kmem_cache {
+      /* 1) 
+            struct array_cache __precpu *cpu_cache;  
+            unsigned int batchcount; //要转移本地高速缓存的大批对象的数量
+            unsigned int limit; //本地高速缓存中空闲对象的最大数目
+            unsigned int shared;//用于多核系统
+      /* 2) touched by every alloc & free from the backend */
+            slab_flags_t flags;     /* constant flags */
+            unsigned int num;       /* 每个 slab 中的 objs 数量 */
+      /* 3) cache_grow/shrink */
+            /* 每个 slab 所使用的页框数量 order */
+            unsigned int gfporder;
+            /* force GFP flags, e.g. GFP_DMA */
+            gfp_t allocflags;
+            size_t colour;          /* cache colouring range */
+            unsigned int colour_off;    /* 着色区的长度 */
+            struct kmem_cache *freelist_cache;
+            unsigned int freelist_size;
+      /* 4) cache creation/removal */
+            const char *name;
+            struct list_head list;
+            int refcount;
+            int object_size;
+            int align;
+            struct kmem_cache_node *node[MAX_NUMNODES];
+      };
+ ![image](https://user-images.githubusercontent.com/20179983/134143052-bf7e4a9f-77d4-4778-903e-6df68ec267fe.png)
+     
 # slab着色 #  
 slab中倾向于把大小相同的对象放在同一个硬件cache line中。为什么呢？方便对齐，方便寻址。  
 但这样会带来一个问题。  
