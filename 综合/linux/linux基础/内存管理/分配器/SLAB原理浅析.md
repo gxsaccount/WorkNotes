@@ -1,25 +1,36 @@
 https://blog.csdn.net/rockrockwu/article/details/79976833  
 https://zhuanlan.zhihu.com/p/358891862
 
-
+# slab的作用 #  
 在Linux中，**伙伴分配器（buddy allocator）是以页为单位管理和分配内存。**  
 但在内核中的需求却以字节为单位（在内核中面临频繁的结构体内存分配问题）。假如我们需要动态申请一个内核结构体（占 20 字节），若仍然分配一页内存，这将严重浪费内存。  
 **作用1:**   
-slab 分配器专为小内存分配而生。**slab分配器分配内存以字节为单位，基于伙伴分配器的大内存进一步细分成小内存分配。换句话说，slab 分配器仍然从 Buddy 分配器中申请内存，之后自己对申请来的内存细分管理。**  
+slab 分配器专为小内存分配而生。**slab分配器分配内存以字节为单位，基于伙伴分配器的大内存进一步细分成小内存分配。 **换句话说，slab 分配器仍然从 Buddy 分配器中申请内存，之后自己对申请来的内存细分管理。  
 **作用2:**  
 除了提供小内存外，**slab 分配器的第二个任务是维护常用对象的缓存**。对于内核中使用的许多结构，初始化对象所需的时间可等于或超过为其分配空间的成本。当创建一个新的slab 时，许多对象将被打包到其中并使用构造函数（如果有）进行初始化。释放对象后，它会保持其初始化状态，这样可以快速分配对象。  
 
-      举例来说, 为管理与进程关联的文件系统数据, 内核必须经常生成struct fs_struct的新实例. 此类型实例占据的内存块同样需要经常回收(在进程结束时).   
-      换句话说, 内核趋向于非常有规律地分配并释放大小为sizeof(fs_struct)的内存块. slab分配器将释放的内存块保存在一个内部列表中. 并不马上返回给伙伴系统. 
+      举例来说, 为管理与进程关联的文件系统数据, 内核必须经常生成struct fs_struct的新实例.   
+      此类型实例占据的内存块同样需要经常回收(在进程结束时).   
+      换句话说, 内核趋向于非常有规律地分配并释放大小为sizeof(fs_struct)的内存块. slab分配器将释放的内存块保存在一个内部列表中. 
+      并不马上返回给伙伴系统. 
       在请求为该类对象分配一个新实例时, 会使用最近释放的内存块。
-      S这有两个优点. 首先, 由于内核不必使用伙伴系统算法, 处理时间会变短. 其次, 由于该内存块仍然是”新”的，因此其仍然驻留在CPU硬件缓存的概率较高.[3]  
+      S这有两个优点. 首先, 由于内核不必使用伙伴系统算法, 处理时间会变短.   
+      其次, 由于该内存块仍然是”新”的，因此其仍然驻留在CPU硬件缓存的概率较高.[3]   
 
 **作用3：**        
 SLAB分配器的最后一项任务是提高CPU硬件缓存的利用率。   
+**slab为每个cpu创建本地对象缓冲区**，减少cpu之间的竞争   
 如果将对象包装到SLAB中后仍有剩余空间，则将**剩余空间用于为SLAB着色**。   
 SLAB着色是一种尝试使不同SLAB中的对象使用CPU硬件缓存中不同行的方案。  
-通过将对象放置在SLAB中的不同起始偏移处，对象可能会在CPU缓存中使用不同的行，从而有助于确保来自同一SLAB缓存的对象不太可能相互刷新。  
+通过将对象放置在SLAB中的不同起始偏移处，对象可能会在CPU缓存中使用不同的行，从而有助于**确保来自同一SLAB缓存的对象不太可能相互刷新**。  
 通过这种方案，原本被浪费掉的空间可以实现一项新功能。  
+![image](https://user-images.githubusercontent.com/20179983/134143052-bf7e4a9f-77d4-4778-903e-6df68ec267fe.png)
+
+![image](https://user-images.githubusercontent.com/20179983/134142932-0c8d1918-8435-492c-9534-e56b5481f4df.png)
+![image](https://user-images.githubusercontent.com/20179983/134143236-93026790-5984-4f1f-aa00-0f0ba11b3c39.png)
+
+
+# 查看slab相关信息 #  
 
 通过命令sudo cat /proc/slabinfo可查看系统当前 slab 使用情况。以vm_area_struct结构体为例，当前系统已分配了 13014 个vm_area_struct缓存，每个大小为 216 字节，其中 active 的有 12392 个。  
       
@@ -51,9 +62,45 @@ SLAB着色是一种尝试使不同SLAB中的对象使用CPU硬件缓存中不同
   
 可以看到，系统中存在的 slab 有些形如 kmalloc-xxx 的 slab，我们称其为**通用型 slab**，用来满足分配通用内存。其他含有具体名字的 slab 我们称其为**专用slab** ，用来为特定结构体分配内存，如 vm_area_struct、mm_struct 等。  
 
-为什么要分专用和通用 slab ？ 最直观的一个原因就是通用 slab 会造成内存浪费：出于 slab 管理的方便，每个 slab 管理的对象大小都是一致的，当我们需要分配一个处于 64-96字节中间大小的对象时，就必须从保存 96 字节的 slab 中分配。而对于专用的 slab，其管理的都是同一个结构体实例，申请一个就给一个恰好内存大小的对象，这就可以充分利用空间。  
+**为什么要分专用和通用 slab ？**  
+通用 slab 会造成内存浪费：出于 slab 管理的方便，每个 slab 管理的对象大小都是一致的，当我们需要分配一个处于 64-96字节中间大小的对象时，就必须从保存 96 字节的 slab 中分配。而对于专用的 slab，其管理的都是同一个结构体实例，申请一个就给一个恰好内存大小的对象，这就可以充分利用空间。   
 
+# slab分配 #
 
+## slab分配器接口 ##  
+Slab 分配器提供的 API 为 kmalloc()和 kfree()。kmalloc()函数定义在include/linux/slab.h文件中，接收两个参数，并调用__kmalloc()函数。最终分配内存的实现是__do_kmalloc()函数。  
+          
+      static __always_inline void *kmalloc(size_t size, gfp_t flags)
+      {
+          ...
+          return __kmalloc(size, flags);
+      }
+      // in mm/slab.c
+      void *__kmalloc(size_t size, gfp_t flags)
+      {
+          return __do_kmalloc(size, flags, _RET_IP_);
+      }
+      static __always_inline void *__do_kmalloc(size_t size, gfp_t flags,
+                            unsigned long caller)
+      {
+          ...
+      }
+
+## slab描述都符分配接口 ##  
+      
+      # 创建slab描述符 name:slab名称;size:缓存对象大小;align:缓存对象需要的对齐字节数;flags:分配掩码;ctor:对象的构造函数 #  
+      struct kmem_cache *
+      kmem_cache_create (const char *name, size_t size, size_t align,
+            unsigned long flags, void (*ctor)(void *))
+      
+      # 销毁slab描述符 #  
+      void kmem_cache_destroy(struct kmem_cache *s)
+      
+      # 分配缓存对象 #
+      void kmem_cache_alloc(struct kmem_cache *s, gfp_t flags);
+
+      # 释放缓存对象 #
+      void kmem_cache_free(struct kmem_cache *s, void *x)
 # slab着色 #  
 slab中倾向于把大小相同的对象放在同一个硬件cache line中。为什么呢？方便对齐，方便寻址。  
 但这样会带来一个问题。  
