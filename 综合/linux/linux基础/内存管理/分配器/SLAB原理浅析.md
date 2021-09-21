@@ -86,6 +86,8 @@ Slab 分配器提供的 API 为 kmalloc()和 kfree()。kmalloc()函数定义在i
       {
           ...
       }
+kmalloc会通过create_kmalloc_cache创建多个slab描述符（size按照2的oeder次幂字节进行对齐），命名为kmalloc-16、kmalloc-32...  
+在调用kmalloc(30,GFP_KERNAL)时，该内存块会再kmalloc-32的slab的描述符中分配一个对象  
 
 ## slab描述都符分配接口 ##  
       
@@ -144,7 +146,38 @@ Linux kernel 使用 struct page 来描述一个slab。单个slab可以在slab链
 slabs中一个slab的内存布局  
 ![image](https://user-images.githubusercontent.com/20179983/134143052-bf7e4a9f-77d4-4778-903e-6df68ec267fe.png)
 
+## 分配流程 ##  
+在 kmem_cache 结构体中还有一个成员struct array\_cache \_\_percpu \*cpu_cache;。其用来为每个**CPU本地cache**  
+在 struct kmem_cache_node结构体中同样存在一个 array_cache的成员 struct array_cache shared*，其构成一个所有 **CPU 共享的缓存**。  
+在此基础上，一个常规的对象申请流程是这样的：  
 
+* 内核首先会从本地 CPU 空闲对象链表中尝试获取一个对象用于分配  
+* 如果失败，则检查所有CPU共享的空闲对象链表链表中是否存在，并且空闲链表中是否存在空闲对象，若有就转移 batchcount 个空闲对象到本地 CPU空闲对象链表中；
+* 如果上一步依然失败，就尝试从 SLAB中分配；
+* 这时如果还失败，kmem_cache会尝试从页框分配器中获取一组连续的页框建立一个新的SLAB，然后从新的SLAB中获取一个对象。
+
+## 释放流程 ##  
+* 首先会先将对象释放到本地CPU空闲对象链表中，  
+* 如果本地CPU空闲对象链表中对象过多，kmem_cache 会将本地CPU空闲对象链表中的batchcount个对象移动到所有CPU共享的空闲对象链表链表中，   
+* 如果所有CPU共享的空闲对象链表链表的对象也太多了，kmem_cache也会把所有CPU共享的空闲对象链表链表中batchcount个数的对象移回它们自己所属的SLAB中， 
+* 这时如果SLAB中空闲对象太多，kmem_cache会整理出一些空闲的SLAB，将这些SLAB所占用的页框释放回页框分配器中。  
+
+## array cache ##  
+     
+     struct array_cache {
+          unsigned int avail;
+          unsigned int limit;
+          unsigned int batchcount;
+          unsigned int touched;
+          void *entry[];
+      };
+      
+      avail： 表示当前可用对象的数量
+      limit：可拥有的最大对象数
+      batchcount：要从 slab_list 转移进本地高速缓存对象的数量，或从本地高速缓存中转移出去的 obj 数量
+      touched： 是否在收缩后访问过
+      entry: 伪数组，保存释放的对象指针
+      
 # slab着色 #  
 slab中倾向于把大小相同的对象放在同一个硬件cache line中。为什么呢？方便对齐，方便寻址。  
 但这样会带来一个问题。  
