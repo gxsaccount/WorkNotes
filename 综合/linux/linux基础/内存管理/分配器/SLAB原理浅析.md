@@ -132,8 +132,16 @@ Slab 分配器提供的 API 为 kmalloc()和 kfree()。kmalloc()函数定义在i
             int align;
             struct kmem_cache_node *node[MAX_NUMNODES];
       };
+ SLAB分配器由可变数量的缓存组成，这些缓存由称为“缓存链”的双向循环链表链接在一起（如下图中的 kmem_cache 链表）。   
+ 在slab分配器的上下文中，缓存是特定类型的多个对象的管理器，例如使用cat /proc/slabinfo命令输出的mm_struct 或fs_cache缓存，其名字保存在kmem_cache->name中（Linux 支持单个最大的 slab 缓存大小为32MB ）。  
+ kmem_cache 中所有对象的大小是相同的(object_size)，并且此 kmem_cache 中所有SLAB的大小也是相同的(gfporder、num)。  
+每个缓存节点在内存中维护称为slab的连续页块，这些页面被切成小块，用于缓存数据结构和对象。   
+kmem_cache的 kmem_cache_node 成员记录了该kmem_cache 下的所有 slabs 列表。形成的结构如下图所示。  
  ![image](https://user-images.githubusercontent.com/20179983/134143052-bf7e4a9f-77d4-4778-903e-6df68ec267fe.png)
-     
+
+Linux kernel 使用 struct page 来描述一个slab。单个slab可以在slab链表之间移动，例如如果一个半满slab被分配了对象后变满了，就要从 slabs_partial 中被删除，同时插入到 slabs_full 中去。  
+
+
 # slab着色 #  
 slab中倾向于把大小相同的对象放在同一个硬件cache line中。为什么呢？方便对齐，方便寻址。  
 但这样会带来一个问题。  
