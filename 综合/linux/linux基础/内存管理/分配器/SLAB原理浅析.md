@@ -25,7 +25,9 @@ SLAB着色是一种尝试使不同SLAB中的对象使用CPU硬件缓存中不同
 通过将对象放置在SLAB中的不同起始偏移处，对象可能会在CPU缓存中使用不同的行，从而有助于**确保来自同一SLAB缓存的对象不太可能相互刷新**。  
 通过这种方案，原本被浪费掉的空间可以实现一项新功能。  
 
-![image](https://user-images.githubusercontent.com/20179983/134142932-0c8d1918-8435-492c-9534-e56b5481f4df.png)
+![image](https://user-images.githubusercontent.com/20179983/134142932-0c8d1918-8435-492c-9534-e56b5481f4df.png)  
+
+slab架构总览
 ![image](https://user-images.githubusercontent.com/20179983/134143236-93026790-5984-4f1f-aa00-0f0ba11b3c39.png)
 
 
@@ -65,7 +67,6 @@ SLAB着色是一种尝试使不同SLAB中的对象使用CPU硬件缓存中不同
 通用 slab 会造成内存浪费：出于 slab 管理的方便，每个 slab 管理的对象大小都是一致的，当我们需要分配一个处于 64-96字节中间大小的对象时，就必须从保存 96 字节的 slab 中分配。而对于专用的 slab，其管理的都是同一个结构体实例，申请一个就给一个恰好内存大小的对象，这就可以充分利用空间。   
 
 # slab分配 #
-![image](https://user-images.githubusercontent.com/20179983/134144228-20d3bbe8-8f8b-440e-80b1-417267de061d.png)
 
 ## slab分配器接口 ##  
 Slab 分配器提供的 API 为 kmalloc()和 kfree()。kmalloc()函数定义在include/linux/slab.h文件中，接收两个参数，并调用__kmalloc()函数。最终分配内存的实现是__do_kmalloc()函数。  
@@ -137,9 +138,11 @@ Slab 分配器提供的 API 为 kmalloc()和 kfree()。kmalloc()函数定义在i
  kmem_cache 中所有对象的大小是相同的(object_size)，并且此 kmem_cache 中所有SLAB的大小也是相同的(gfporder、num)。  
 每个缓存节点在内存中维护称为slab的连续页块，这些页面被切成小块，用于缓存数据结构和对象。   
 kmem_cache的 kmem_cache_node 成员记录了该kmem_cache 下的所有 slabs 列表。形成的结构如下图所示。  
- ![image](https://user-images.githubusercontent.com/20179983/134143052-bf7e4a9f-77d4-4778-903e-6df68ec267fe.png)
-
+![image](https://user-images.githubusercontent.com/20179983/134144228-20d3bbe8-8f8b-440e-80b1-417267de061d.png)
 Linux kernel 使用 struct page 来描述一个slab。单个slab可以在slab链表之间移动，例如如果一个半满slab被分配了对象后变满了，就要从 slabs_partial 中被删除，同时插入到 slabs_full 中去。  
+
+slabs中一个slab的内存布局  
+![image](https://user-images.githubusercontent.com/20179983/134143052-bf7e4a9f-77d4-4778-903e-6df68ec267fe.png)
 
 
 # slab着色 #  
