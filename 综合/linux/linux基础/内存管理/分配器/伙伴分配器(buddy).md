@@ -94,7 +94,7 @@ buddy分配系统在普通内存池的基础上，允许两个大小相同且相
 
 void free_pages(unsigned long addr, unsigned int order)  
 其实现流程大致如下图所示：  
-![image](https://user-images.githubusercontent.com/20179983/132310416-2609ae5d-ebf3-430a-9f90-e1d2ceedd6ab.png)
+![image](https://user-images.githubusercontent.com/20179983/132310416-2609ae5d-ebf3-430a-9f90-e1d2ceedd6ab.png)  
 其实single page可以视作是compoud pages中"order"为0的特例，但single page在分配和释放时多了一层机制。在计算机领域，从硬件到软件，可谓“无处不cache”，  内存分配这么重要的环节自然也是少不了cache的。Linux中对应的实现为per-CPU的page frame cache（简称pcp http://jake.dothome.co.kr/per-cpu-page-frame-cache/ ）。   
 如果是single page，那么分配时会先从pcp获取，pcp为空再从buddy系统批量申请；释放时也是先回到pcp，pcp溢满再批量回归到buddy系统。  
 对于compound page，在__free_pages_ok()中，获得了物理页面号"pfn"和"migratetype"，准备好了核心函数__free_one_page()所需的各项参数。  
