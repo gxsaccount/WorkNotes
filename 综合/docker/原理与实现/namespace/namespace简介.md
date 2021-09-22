@@ -102,7 +102,7 @@ namespace的结构体定义于task_struct中的nsproxy，在创建进程时，**
       struct net        *net_ns;
       struct cgroup_namespace *cgroup_ns;
     };
-      copy_namespace()源码如下，可见其中如果没有CLONE_NEWNS | CLONE_NEWUTS | CLONE_NEWIPC | CLONE_NEWPID | CLONE_NEWNET | CLONE_NEWCGROUP，就返回原来的 namespace，调用 get_nsproxy，否则调用create_new_namespace()创建新的名字空间。
+copy_namespace()源码如下，可见其中如果没有CLONE_NEWNS | CLONE_NEWUTS | CLONE_NEWIPC | CLONE_NEWPID | CLONE_NEWNET | CLONE_NEWCGROUP，就返回原来的 namespace，调用 get_nsproxy，否则调用create_new_namespace()创建新的名字空间。
 
     /*
      * called from clone.  This now handles copy for nsproxy and all
@@ -129,7 +129,7 @@ namespace的结构体定义于task_struct中的nsproxy，在创建进程时，**
       tsk->nsproxy = new_ns;
       return 0;
     }
-      create_new_namespaces()函数进行namespace的复制，根据众多标记位分别判断是复制还是需要重新建立新的相应namesapce。由此就实现了namespace的创建工作。
+create_new_namespaces()函数进行namespace的复制，根据众多标记位分别判断是复制还是需要重新建立新的相应namesapce。由此就实现了namespace的创建工作。
 
     /*
      * Create new nsproxy and all of its the associated namespaces.
