@@ -1,8 +1,8 @@
 https://ty-chen.github.io/linux-kernel-docker/    
 
 # NameSpace #  
-  namespace是实现“看起来”隔离的关键技术，其作用主要是修改进程的视图，使其看起来仿佛是一个新的操作系统进程树。  
-  docker使用namespace通常可以通过命令行或者程序调用的方式执行。对应到容器技术，为了隔离不同类型的资源，Linux 内核里面实现了以下几种不同类型的 namespace。  
+namespace是实现“看起来”隔离的关键技术，其作用主要是修改进程的视图，使其看起来仿佛是一个新的操作系统进程树。  
+docker使用namespace通常可以通过命令行或者程序调用的方式执行。对应到容器技术，为了隔离不同类型的资源，Linux 内核里面实现了以下几种不同类型的 namespace。  
 
 * UTS，对应的宏为 CLONE_NEWUTS，表示不同的 namespace 可以配置不同的 hostname。
 * User，对应的宏为 CLONE_NEWUSER，表示不同的 namespace 可以配置不同的用户和组。
