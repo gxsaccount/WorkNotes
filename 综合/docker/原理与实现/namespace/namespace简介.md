@@ -55,7 +55,7 @@ unshare()则是退出当前namespace并加入到创建的新namespace之中。
         }
         stackTop = stack + STACK_SIZE;
 
-        pid = clone(childFunc, stackTop, CLONE_NEWNS|CLONE_NEWPID|CLONE_NEWNET|SIGCHLD, NULL);
+        pid = clone(childFunc, stackTop, CLONE_NEWNS|CLONE_NEWPID|CLONE_NEWNET|SIGCHLD, NULL);  //关键生效函数再此处！！！
         if (pid == -1)
         {
             perror("clone"); 
