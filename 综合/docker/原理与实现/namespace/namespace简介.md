@@ -1,5 +1,5 @@
 https://ty-chen.github.io/linux-kernel-docker/    
-
+https://blog.csdn.net/tdaajames/article/details/107520153
 # NameSpace #  
 namespace是实现“看起来”隔离的关键技术，其作用主要是修改进程的视图，使其看起来仿佛是一个新的操作系统进程树。  
 docker使用namespace通常可以通过命令行或者程序调用的方式执行。对应到容器技术，为了隔离不同类型的资源，Linux 内核里面实现了以下几种不同类型的 namespace。  
