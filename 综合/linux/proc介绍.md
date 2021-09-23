@@ -1,3 +1,5 @@
+https://www.tecmint.com/exploring-proc-file-system-in-linux/   
+
 1. proc文件系统简介    
 proc文件系统是由内核创建的虚拟文件系统，被内核用来向用户导出信息，通过它可以在Linux内核空间和用户空间之间进行通信。  
 在GUN/Linux操作系统中，/proc是一个位于内存中的伪文件系统(in-memory pseudo-file system)。该目录下保存的不是真正的文件和目录，而是一些“运行时”信息，如系统内存、磁盘io、设备挂载信息和硬件配置信息等。  
