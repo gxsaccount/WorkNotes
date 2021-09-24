@@ -34,12 +34,13 @@ g++ -g 编译简单例子还行，适合观察单元测试的小程序
     int main(int argc, char *argv[])
     {
         int p=fun1();
-        //free(--g_p2);
+        //    free(--g_p2);//如果不free, 将会有 possibly lost 内存泄露
         return 0;
     }
     
  ## definitely lost ##  
  确认丢失。程序中存在内存泄露，应尽快修复。当程序结束时如果一块动态分配的内存没有被释放且通过程序内的指针变量均无法访问这块内存则会报这个错误。  
+    
     int  fun1(void)
     {
         int **p=(int **)malloc(16);
