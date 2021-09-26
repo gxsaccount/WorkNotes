@@ -6,6 +6,10 @@ linux物理内存中的每个zone都有自己独立的3个档位的watermark值�
 低水线(WMARK_LOW)：空闲页数小数低水线，说明该内存区域的**内存轻微不足**。默认情况下，该值为WMARK_MIN的125%  
 高水线(WMARK_HIGH)：如果内存区域的空闲页数大于高水线，说明该**内存区域水线充足**。默认情况下，该值为WMARK_MAX的150%  
 
+![image](https://user-images.githubusercontent.com/20179983/134799606-a693d823-111f-45a7-aae4-bb8efb5c744f.png)
+
+
+
 ## 内存轻微不足
 判断依据:在进行内存分配的时候，如果分配器（比如buddy allocator）发现当前空余内存的值低于”low”但高于”min”，说明现在内存面临一定的压力。  
 回收方法：那么在此次内存分配完成后，kswapd将被唤醒，以执行内存回收操作。  
