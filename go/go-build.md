@@ -52,6 +52,7 @@ install 安装作为目标的依赖关系的包(用于增量编译提速)。
     '-s -w': 压缩编译后的体积  
     -s: 去掉符号表  
     -w: 去掉调试信息，不能gdb调试了  
+    -X:设置软件包变量-> https://blog.csdn.net/qcrao/article/details/114826320  
 -linkshared  
     链接到以前使用创建的共享库  
     -buildmode=shared.  
