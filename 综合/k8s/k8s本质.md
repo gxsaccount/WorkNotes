@@ -60,7 +60,55 @@ Kubernetes 项目提供了一种叫作 Secret 的对象，它其实是一个保�
 如，Web 应用的 Pod）启动时，自动把 Secret 里的数据以 Volume 的方式挂载到容器里。这样，
 这个 Web 应用就可以访问数据库了  
 
+除了应用与应用之间的关系外，应用运行的形态是影响“如何容器化这个应用”的第二个重要因
+素。
+为此，Kubernetes 定义了新的、基于 Pod 改进后的对象。比如 Job，用来描述一次性运行的
+Pod（比如，大数据任务）；再比如 DaemonSet，用来描述每个宿主机上必须且只能运行一个副本
+的守护进程服务；又比如 CronJob，则用于描述定时任务等等。
+如此种种，正是 Kubernetes 项目定义容器间关系和形态的主要方法。  
+
+相比之下，在 Kubernetes 项目中，我们所推崇的使用方法是：
+首先，通过一个“编排对象”，比如 Pod、Job、CronJob 等，来描述你试图管理的应用；
+然后，再为它定义一些“服务对象”，比如 Service、Secret、Horizontal Pod Autoscaler（自
+动水平扩展器）等。这些对象，会负责具体的平台级功能。
+这种使用方法，就是所谓的“声明式 API”。这种 API 对应的“编排对象”和“服务对象”，都是
+Kubernetes 项目中的 API 对象（API Object）。
+这就是 Kubernetes 最核心的设计理念，也是接下来我会重点剖析的关键技术点。   
+
+
+**最后，我来回答一个更直接的问题：Kubernetes 项目如何启动一个容器化任务呢？**    
+
+比如，我现在已经制作好了一个 Nginx 容器镜像，希望让平台帮我启动这个镜像。并且，我要求平
+台帮我运行两个完全相同的 Nginx 副本，以负载均衡的方式共同对外提供服务。
+如果是自己 DIY 的话，可能需要启动两台虚拟机，分别安装两个 Nginx，然后使用 keepalived
+为这两个虚拟机做一个虚拟 IP。
+而如果使用 Kubernetes 项目呢？你需要做的则是编写如下这样一个 YAML 文件（比如名叫
+nginx-deployment.yaml）：   
+
+    apiVersion: apps/v1　　#apiVersion是当前配置格式的版本
+    kind: Deployment　　　　#kind是要创建的资源类型，这里是Deploymnet
+    metadata:　　　　　　　　#metadata是该资源的元数据，name是必须的元数据项
+      name: nginx-deployment
+      labels:
+        app: nginx
+    spec:　　　　　　　　　　#spec部分是该Deployment的规则说明
+      replicas: 2　　　　　 #relicas指定副本数量，默认为1
+      selector:
+        matchLabels:
+          app: nginx
+      template:　　　　　　#template定义Pod的模板，这是配置的重要部分（主体部分）
+        metadata:　　　　  #metadata定义Pod的元数据，至少要顶一个label，label的key和value可以任意指定
+          labels:
+            app: nginx
+        spec:　　　　　　　#spec描述的是Pod的规则，此部分定义pod中每一个容器的属性，name和image是必需的
+          containers:
+          - name: nginx
+            image: nginx:1.7.9
+            ports:
+            - containerPort: 80
 
 
 
+执行如下代码即可启动nginx容器副本  
+    kubectl create -f nginx-deployment.yaml
 
