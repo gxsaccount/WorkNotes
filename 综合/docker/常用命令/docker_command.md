@@ -228,16 +228,28 @@ NAMES: 自动分配的容器名称。
     EXPOSE  22 
     EXPOSE  80   # 允许外界访问容器的 80 端口  
     ENV NAME World  # 设置环境变量  
-    CMD ["python", "app.py"] # 设置容器进程为：python app.py，即：这个 Python 应用的启动命令 CMD ["python", "app.py"]
+    CMD ["python", "app.py"] # 设置容器进程为：python app.py，即：这个 Python 应用的启动命令 CMD ["python", "app.py"]  等价于 "docker
+run python app.py"。
     
-    FROM，指定使用哪个镜像源
-    RUN 指令告诉docker 在镜像内执行命令   
+
+
+在使用 Dockerfile 时，你可能还会看到一个叫作 ENTRYPOINT 的原语。实际上，它和
+CMD 都是 Docker 容器进程启动所必需的参数，完整执行格式是：“ENTRYPOINT CMD”。
+但是，默认情况下，Docker 会为你提供一个隐含的 ENTRYPOINT，即：/bin/sh -c。所以，在
+不指定 ENTRYPOINT 时，比如在我们这个例子里，实际上运行在容器里的完整进程
+是：/bin/sh -c “python app.py”，即 CMD 的内容就是 ENTRYPOINT 的参数。   
+
+
  使用 Dockerfile 文件，通过 docker build 命令来构建一个镜像   
     docker build -t runoob/centos:6.7 .  
     参数说明：
     -t ：指定要创建的目标镜像名
     . ：Dockerfile 文件所在目录，可以指定Dockerfile 的绝对路径   
-  
+ 等同于 Docker 使用基础镜像启动了一个容器，然后在容器中依次执行 Dockerfile 中的原语。  
+ 需要注意的是，Dockerfile 中的每个原语执行后，都会生成一个对应的镜像层。即使原语本身
+并没有明显地修改文件的操作（比如，ENV 原语），它对应的层也会存在。只不过在外界看
+来，这个层是空的。   
+
   ## 设置镜像标签 ##  
   使用 docker tag 命令，为镜像添加一个新的标签  
     
