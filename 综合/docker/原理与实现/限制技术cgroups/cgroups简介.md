@@ -25,7 +25,16 @@ cgroups 的全称是control groups，cgroups为每种可以控制的资源定义
     freezer 子系统，可以挂起或者恢复 cgroups 中的进程。  
     ns 子系统，可以使不同 cgroups 下面的进程使用不同的 namespace。  
     
-这里面每一个子系统都需要与内核的其他模块配合来完成资源的控制，比如对 cpu 资源的限制是通过进程调度模块根据 cpu 子系统的配置来完成的；对内存资源的限制则是内存模块根据 memory 子系统的配置来完成的，而对网络数据包的控制则需要 Traffic Control 子系统来配合完成。(需要更具体的分析才能知道每个子系统的实现)  
+这里面每一个子系统都需要与内核的其他模块配合来完成资源的控制，比如对 cpu 资源的限制是通过进程调度模块根据 cpu 子系统的配置来完成的；对内存资源的限制则是内存模块根据 memory 子系统的配置来完成的，而对网络数据包的控制则需要 Traffic Control 子系统来配合完成。(需要更具体的分析才能知道每个子系统的实现) 
+ 
+使用mount -t cgroup命令查看可限制内容  
+        mount -t cgroup 
+        cpuset on /sys/fs/cgroup/cpuset type cgroup (rw,nosuid,nodev,noexec,relatime,cpuset) 
+        cpu on /sys/fs/cgroup/cpu type cgroup (rw,nosuid,nodev,noexec,relatime,cpu) 
+        cpuacct on /sys/fs/cgroup/cpuacct type cgroup (rw,nosuid,nodev,noexec,relatime,cpuacct) 
+        blkio on /sys/fs/cgroup/blkio type cgroup (rw,nosuid,nodev,noexec,relatime,blkio) 
+        memory on /sys/fs/cgroup/memory type cgroup (rw,nosuid,nodev,noexec,relatime,memory) 
+        ...
 
 # cgroups 层级结构（Hierarchy）#  
 
