@@ -73,7 +73,7 @@ Docker 在镜像的设计中，引入了层（layer）的概念。也就是说�
 在这个合并后的目录 C 里，有 a、b、x 三个文件，并且 x 文件只有一份。这，就是“合并”的含义。此外，如果你在目录 C 里对 a、b、x 文件做修改，这些修改也会在对应的目录 A、B 中生效。  
 
 那么，在 Docker 项目中，又是如何使用这种 Union File System 的呢？  
-我的环境是 Ubuntu 16.04 和 Docker CE 18.05，这对组合默认使用的是 AuFS 这个联合文件系统的实现。你可以通过 docker info 命令，查看到这个信息。
+我的环境是 Ubuntu 16.04 和 Docker CE 18.05，这对组合默认使用的是 **AuFS 这个联合文件系统的实现**。你可以通过 docker info 命令，查看到这个信息。
 
 AuFS 的全称是 Another UnionFS，后改名为 Alternative UnionFS，再后来干脆改名叫作 Advance UnionFS，从这些名字中你应该能看出这样两个事实：
 
@@ -98,79 +98,58 @@ $ docker run -d ubuntu:latest sleep 3600
 layer
 这个所谓的“镜像”，实际上就是一个 Ubuntu 操作系统的 rootfs，它的内容是 Ubuntu 操作系统的所有文件和目录。不过，与之前我们讲述的 rootfs 稍微不同的是，Docker 镜像使用的 rootfs，往往由多个“层”组成：
 
-$ docker image inspect ubuntu:latest
-...
-     "RootFS": {
-      "Type": "layers",
-      "Layers": [
-        "sha256:f49017d4d5ce9c0f544c...",
-        "sha256:8f2b771487e9d6354080...",
-        "sha256:ccd4d61916aaa2159429...",
-        "sha256:c01d74f99de40e097c73...",
-        "sha256:268a067217b5fe78e000..."
-      ]
-    }
-1
-2
-3
-4
-5
-6
-7
-8
-9
-10
-11
-12
+        $ docker image inspect ubuntu:latest
+        ...
+             "RootFS": {
+              "Type": "layers",
+              "Layers": [
+                "sha256:f49017d4d5ce9c0f544c...",
+                "sha256:8f2b771487e9d6354080...",
+                "sha256:ccd4d61916aaa2159429...",
+                "sha256:c01d74f99de40e097c73...",
+                "sha256:268a067217b5fe78e000..."
+              ]
+            }
+
 可以看到，这个 Ubuntu 镜像，实际上由五个层组成。这五个层就是五个增量 rootfs，每一层都是 Ubuntu 操作系统文件与目录的一部分；而在使用镜像时，Docker 会把这些增量联合挂载在一个统一的挂载点上（等价于前面例子里的“/C”目录）。
 
 这个挂载点就是 /var/lib/docker/aufs/mnt/，比如：
 
 /var/lib/docker/aufs/mnt/6e3be5d2ecccae7cc0fcfa2a2f5c89dc21ee30e166be823ceaeba15dce645b3e
 复制代码
-1
-2
+
 不出意外的，这个目录里面正是一个完整的 Ubuntu 操作系统：
 
 $ ls /var/lib/docker/aufs/mnt/6e3be5d2ecccae7cc0fcfa2a2f5c89dc21ee30e166be823ceaeba15dce645b3e
 bin boot dev etc home lib lib64 media mnt opt proc root run sbin srv sys tmp usr var
-1
-2
+
 那么，前面提到的五个镜像层，又是如何被联合挂载成这样一个完整的 Ubuntu 文件系统的呢？
 
-这个信息记录在 AuFS 的系统目录 /sys/fs/aufs 下面。
+**这个信息记录在 AuFS 的系统目录 /sys/fs/aufs 下面。**  
 
 首先，通过查看 AuFS 的挂载信息，我们可以找到这个目录对应的 AuFS 的内部 ID（也叫：si）：
 
 $ cat /proc/mounts| grep aufs
 none /var/lib/docker/aufs/mnt/6e3be5d2ecccae7cc0fc... aufs rw,relatime,si=972c6d361e6b32ba,dio,dirperm1 0 0
-1
-2
+
 即，si=972c6d361e6b32ba。
 
 然后使用这个 ID，你就可以在 /sys/fs/aufs 下查看被联合挂载在一起的各个层的信息：
 
-$ cat /sys/fs/aufs/si_972c6d361e6b32ba/br[0-9]*
-/var/lib/docker/aufs/diff/6e3be5d2ecccae7cc...=rw
-/var/lib/docker/aufs/diff/6e3be5d2ecccae7cc...-init=ro+wh
-/var/lib/docker/aufs/diff/32e8e20064858c0f2...=ro+wh
-/var/lib/docker/aufs/diff/2b8858809bce62e62...=ro+wh
-/var/lib/docker/aufs/diff/20707dce8efc0d267...=ro+wh
-/var/lib/docker/aufs/diff/72b0744e06247c7d0...=ro+wh
-/var/lib/docker/aufs/diff/a524a729adadedb90...=ro+wh
-1
-2
-3
-4
-5
-6
-7
-8
+        $ cat /sys/fs/aufs/si_972c6d361e6b32ba/br[0-9]*
+        /var/lib/docker/aufs/diff/6e3be5d2ecccae7cc...=rw
+        /var/lib/docker/aufs/diff/6e3be5d2ecccae7cc...-init=ro+wh
+        /var/lib/docker/aufs/diff/32e8e20064858c0f2...=ro+wh
+        /var/lib/docker/aufs/diff/2b8858809bce62e62...=ro+wh
+        /var/lib/docker/aufs/diff/20707dce8efc0d267...=ro+wh
+        /var/lib/docker/aufs/diff/72b0744e06247c7d0...=ro+wh
+        /var/lib/docker/aufs/diff/a524a729adadedb90...=ro+wh
+
 从这些信息里，我们可以看到，镜像的层都放置在 /var/lib/docker/aufs/diff 目录下，然后被联合挂载在 /var/lib/docker/aufs/mnt 里面。
 
 而且，从这个结构可以看出来，这个容器的 rootfs 由如下所示的三部分组成：
 
-第一部分，只读层。
+**第一部分，只读层。**  
 
 它是这个容器的 rootfs 最下面的五层，对应的正是 ubuntu:latest 镜像的五层。可以看到，它们的挂载方式都是只读的（ro+wh，即 readonly+whiteout，至于什么是 whiteout，我下面马上会讲到）。
 
@@ -182,29 +161,24 @@ $ ls /var/lib/docker/aufs/diff/32e8e20064858c0f2...
 run
 $ ls /var/lib/docker/aufs/diff/a524a729adadedb900...
 bin boot dev etc home lib lib64 media mnt opt proc root run sbin srv sys tmp usr var
-1
-2
-3
-4
-5
-6
+
 可以看到，这些层，都以增量的方式分别包含了 Ubuntu 操作系统的一部分。
 
-第二部分，可读写层。
+**第二部分，可读写层。**   
 
 它是这个容器的 rootfs 最上面的一层（6e3be5d2ecccae7cc），它的挂载方式为：rw，即 read write。在没有写入文件之前，这个目录是空的。而一旦在容器里做了写操作，你修改产生的内容就会以增量的方式出现在这个层中。
 
-可是，你有没有想到这样一个问题：如果我现在要做的，是删除只读层里的一个文件呢？
+可是，你有没有想到这样一个问题：如果我现在要做的，是**删除只读层里的一个文件呢？**   
 
-为了实现这样的删除操作，AuFS 会在可读写层创建一个 whiteout 文件，把只读层里的文件“遮挡”起来。
+为了实现这样的删除操作，AuFS 会在可读写层创建一个 **whiteout** 文件，把只读层里的文件“遮挡”起来。
 
 比如，你要删除只读层里一个名叫 foo 的文件，那么这个删除操作实际上是在可读写层创建了一个名叫.wh.foo 的文件。这样，当这两个层被联合挂载之后，foo 文件就会被.wh.foo 文件“遮挡”起来，“消失”了。这个功能，就是“ro+wh”的挂载方式，即只读 +whiteout 的含义。我喜欢把 whiteout 形象地翻译为：“白障”。
 
 所以，最上面这个可读写层的作用，就是专门用来存放你修改 rootfs 后产生的增量，无论是增、删、改，都发生在这里。而当我们使用完了这个被修改过的容器之后，还可以使用 docker commit 和 push 指令，保存这个被修改过的可读写层，并上传到 Docker Hub 上，供其他人使用；而与此同时，原先的只读层里的内容则不会有任何变化。这，就是增量 rootfs 的好处。
 
-第三部分，Init 层。
+**第三部分，Init 层。**  
 
-它是一个以“-init”结尾的层，夹在只读层和读写层之间。Init 层是 Docker 项目单独生成的一个内部层，专门用来存放 /etc/hosts、/etc/resolv.conf 等信息。
+它是一个以“-init”结尾的层，夹在只读层和读写层之间。**Init 层是 Docker 项目单独生成的一个内部层，专门用来存放 /etc/hosts、/etc/resolv.conf 等信息。**
 
 需要这样一层的原因是，这些文件本来属于只读的 Ubuntu 镜像的一部分，但是用户往往需要在启动容器时写入一些指定的值比如 hostname，所以就需要在可读写层对它们进行修改。
 
@@ -212,5 +186,7 @@ bin boot dev etc home lib lib64 media mnt opt proc root run sbin srv sys tmp usr
 
 所以，Docker 做法是，在修改了这些文件之后，以一个单独的层挂载了出来。而用户执行 docker commit 只会提交可读写层，所以是不包含这些内容的。
 
-最终，这 7 个层都被联合挂载到 /var/lib/docker/aufs/mnt 目录下，表现为一个完整的 Ubuntu 操作系统供容器使用。
+最终，这 7 个层都被联合挂载到 **/var/lib/docker/aufs/mnt** 目录下，表现为一个完整的 Ubuntu 操作系统供容器使用。
+
+![image](https://user-images.githubusercontent.com/20179983/140017475-f90f617a-ce37-4a9e-97e6-0bec9633955a.png)
 
