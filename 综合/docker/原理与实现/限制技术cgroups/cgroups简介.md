@@ -238,5 +238,6 @@ Cgroups 对资源的限制能力也有很多不完善的地方，被提
 据，而不是当前容器的数据。
 造成这个问题的原因就是，/proc 文件系统并不知道用户通过 Cgroups 给这个容器做了什么样
 的资源限制，即：/proc 文件系统不了解 Cgroups 限制的存在。  
+使用LXCFS  
 参考
 1 cgroups 详解：http://files.cnblogs.com/files/lisperl/cgroups%E4%BB%8B%E7%BB%8D.pdf 2 how to use cgroup: http://tiewei.github.io/devops/howto-use-cgroup/ 3 Control groups, part 6: A look under the hood: http://lwn.net/Articles/606925/
