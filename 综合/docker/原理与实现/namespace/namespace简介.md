@@ -1,7 +1,7 @@
 https://ty-chen.github.io/linux-kernel-docker/    
 https://blog.csdn.net/tdaajames/article/details/107520153
 # NameSpace #  
-namespace是实现“看起来”隔离的关键技术，其作用主要是修改进程的视图，使其看起来仿佛是一个新的操作系统进程树。  
+namespace是实现“看起来”隔离的关键技术，其作用主要是**修改进程的视图**，使其看起来仿佛是一个新的操作系统进程树。  
 docker使用namespace通常可以通过命令行或者程序调用的方式执行。对应到容器技术，为了隔离不同类型的资源，Linux 内核里面实现了以下几种不同类型的 namespace。  
 
 * UTS，对应的宏为 CLONE_NEWUTS，表示不同的 namespace 可以配置不同的 hostname。
@@ -75,6 +75,12 @@ unshare()则是退出当前namespace并加入到创建的新namespace之中。
     }
 执行之前，可以通过echo看到进程号，而运行后，再次echo会发现进程号已经变成了1，即通过namespace伪装成了1号进程。  
 
+
+**clone参数解释**    
+        CLONE_NEWNS
+        CLONE_NEWPID
+        CLONE_NEWNET
+        SIGCHLD
 ## 源码实现 ##  
 namespace的结构体定义于task_struct中的nsproxy，在创建进程时，**调用链执行到copy_process()时，会执行copy_namesapces()进行复制和设置。**  
 
