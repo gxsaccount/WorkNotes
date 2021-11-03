@@ -74,6 +74,11 @@ cgroups 的全称是control groups，cgroups为每种可以控制的资源定义
 它意味着在每 100 ms 的时间里，被该控制组
 限制的进程只能使用 20 ms 的 CPU 时间，也就是说这个进程只能使用到 20% 的 CPU 带宽。  
 
+
+docker中的使用  
+
+        docker run -it --cpu-period=100000 --cpu-quota=20000 ubuntu /bin/bash  
+
 # cgroups 层级结构（Hierarchy）#  
 
 1.内核使用 cgroup 结构体来表示一个 control group 对某一个或者某几个 cgroups 子系统的资源限制。  
