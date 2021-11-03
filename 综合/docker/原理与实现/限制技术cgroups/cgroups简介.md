@@ -28,6 +28,7 @@ cgroups 的全称是control groups，cgroups为每种可以控制的资源定义
 这里面每一个子系统都需要与内核的其他模块配合来完成资源的控制，比如对 cpu 资源的限制是通过进程调度模块根据 cpu 子系统的配置来完成的；对内存资源的限制则是内存模块根据 memory 子系统的配置来完成的，而对网络数据包的控制则需要 Traffic Control 子系统来配合完成。(需要更具体的分析才能知道每个子系统的实现) 
  
 使用mount -t cgroup命令查看可限制内容  
+        
         mount -t cgroup 
         cpuset on /sys/fs/cgroup/cpuset type cgroup (rw,nosuid,nodev,noexec,relatime,cpuset) 
         cpu on /sys/fs/cgroup/cpu type cgroup (rw,nosuid,nodev,noexec,relatime,cpu) 
@@ -35,6 +36,43 @@ cgroups 的全称是control groups，cgroups为每种可以控制的资源定义
         blkio on /sys/fs/cgroup/blkio type cgroup (rw,nosuid,nodev,noexec,relatime,blkio) 
         memory on /sys/fs/cgroup/memory type cgroup (rw,nosuid,nodev,noexec,relatime,memory) 
         ...
+
+**简单的使用**  
+
+在 /sys/fs/cgroup 下面有很多诸如 cpuset、cpu、 memory 这样的子目录，也叫
+子系统。这些都是我这台机器当前可以被 Cgroups 进行限制的资源种类。而在子系统对应的资
+源种类下，你就可以看到该类资源具体可以被限制的方法。比如，对 CPU 子系统来说，我们就
+可以看到如下几个配置文件，这个指令是：  
+       
+       $ ls /sys/fs/cgroup/cpu 
+        cgroup.clone_children cpu.cfs_period_us cpu.rt_period_us cpu.shares notify_on_release cgroup.procs cpu.cfs_quota_us cpu.rt_runtime_us cpu.stat tasks  
+        
+        熟悉 Linux CPU 管理的话，你就会在它的输出里注意到 cfs_period 和 cfs_quota 这样的
+关键词。这两个参数需要组合使用，可以用来限制进程在长度为 cfs_period 的一段时间内，只
+能被分配到总量为 cfs_quota 的 CPU 时间。  
+在对应的子系统下面创建一个目录，比如，我们现在进入 /sys/fs/cgroup/cpu 目录下：  
+
+        root@ubuntu:/sys/fs/cgroup/cpu$ mkdir container   
+        root@ubuntu:/sys/fs/cgroup/cpu$ ls container/ 
+        cgroup.clone_children cpu.cfs_period_us cpu.rt_period_us cpu.shares notify_on_release cgroup.procs cpu.cfs_quota_us cpu.rt_runtime_us cpu.stat tasks  
+        这个目录就称为一个“控制组”。你会发现，操作系统会在你新创建的 container 目录下，自
+动生成该子系统对应的资源限制文件。  
+现在，我们在后台执行这样一条脚本：  
+        $ while : ; do : ; done &  
+        
+        它执行了一个死循环，可以把计算机的 CPU 吃到 100%，根据它的输出，我们可以看到
+这个脚本在后台运行的进程号（PID）是 226。
+
+查看子系统的默认设置，并向 container 组里的 cfs_quota 文件写入 20 ms（20000 us）  
+        
+        $ cat /sys/fs/cgroup/cpu/container/cpu.cfs_quota_us 
+        -1                                                   //不做限制
+        $ cat /sys/fs/cgroup/cpu/container/cpu.cfs_period_us 
+        100000                                                 //限制周期为100ms
+        echo 20000 > /sys/fs/cgroup/cpu/container/cpu.cfs_quota_us //在一个限制周期内只能占用20ms  
+
+它意味着在每 100 ms 的时间里，被该控制组
+限制的进程只能使用 20 ms 的 CPU 时间，也就是说这个进程只能使用到 20% 的 CPU 带宽。  
 
 # cgroups 层级结构（Hierarchy）#  
 
