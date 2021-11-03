@@ -217,16 +217,18 @@ NAMES: 自动分配的容器名称。
 使用命令 docker build ， 从零开始来创建一个新的镜像。为此，我们需要创建一个 Dockerfile 文件，其中包含一组指令来告诉 Docker 如何构建我们的镜像  
 
     cat Dockerfile 
-    FROM    centos:6.7
+    FROM    centos:6.7   #基于centos:6.7作为基础镜像  
     MAINTAINER      Fisher "fisher@sudops.com"
-
-    RUN     /bin/echo 'root:123456' |chpasswd
+    WORKDIR /app  #将工作目录切换为 /app  
+    ADD . /app  # 将当前目录下的所有内容复制到 /app 下  
+    RUN     /bin/echo 'root:123456' |chpasswd  #执行命令  
     RUN     useradd runoob
     RUN     /bin/echo 'runoob:123456' |chpasswd
     RUN     /bin/echo -e "LANG=\"en_US.UTF-8\"" >/etc/default/local
-    EXPOSE  22
-    EXPOSE  80
-    CMD     /usr/sbin/sshd -D
+    EXPOSE  22 
+    EXPOSE  80   # 允许外界访问容器的 80 端口  
+    ENV NAME World  # 设置环境变量  
+    CMD ["python", "app.py"] # 设置容器进程为：python app.py，即：这个 Python 应用的启动命令 CMD ["python", "app.py"]
     
     FROM，指定使用哪个镜像源
     RUN 指令告诉docker 在镜像内执行命令   
