@@ -227,5 +227,16 @@ Linux中，用户可以使用mount命令挂载 cgroups 文件系统，格式为:
 
 笔者希望通过整篇文章的介绍，读者能够了解到 cgroups 能够完成什么样的功能，并且希望读者在使用 cgroups 的功能的时候，能够大体知道内核通过一种什么样的方式来实现这种功能。  
 
+
+
+Cgroups 对资源的限制能力也有很多不完善的地方，被提
+及最多的自然是 /proc 文件系统的问题。
+众所周知，Linux 下的 /proc 目录存储的是记录当前内核运行状态的一系列特殊文件，用户可以
+通过访问这些文件，查看系统以及当前正在运行的进程的信息，比如 CPU 使用情况、内存占用
+率等，这些文件也是 top 指令查看系统信息的主要数据来源。
+但是，你如果在容器里执行 top 指令，就会发现，它显示的信息居然是宿主机的 CPU 和内存数
+据，而不是当前容器的数据。
+造成这个问题的原因就是，/proc 文件系统并不知道用户通过 Cgroups 给这个容器做了什么样
+的资源限制，即：/proc 文件系统不了解 Cgroups 限制的存在。  
 参考
 1 cgroups 详解：http://files.cnblogs.com/files/lisperl/cgroups%E4%BB%8B%E7%BB%8D.pdf 2 how to use cgroup: http://tiewei.github.io/devops/howto-use-cgroup/ 3 Control groups, part 6: A look under the hood: http://lwn.net/Articles/606925/
