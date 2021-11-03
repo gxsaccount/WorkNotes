@@ -44,7 +44,7 @@ Namespace 的存在，这个挂载对宿主机不可见，所以容器进程就�
 ** 解决办法 **
 Docker 公司在实现 Docker 镜像时并没有沿用以前制作 rootfs 的标准流程，而是做了一个小小的创新：
   
-    Docker 在镜像的设计中，引入了层（layer）的概念。也就是说，用户制作镜像的每一步操作，都会生成一个层，也就是一个增量 rootfs。
+Docker 在镜像的设计中，引入了层（layer）的概念。也就是说，用户制作镜像的每一步操作，都会生成一个层，也就是一个**增量 rootfs**。  
 
 这个创新到了一种叫作联合文件系统（Union File System）的能力。  
 **Union File System 也叫 UnionFS，最主要的功能是将多个不同位置的目录联合挂载（union mount）到同一个目录下。**    
