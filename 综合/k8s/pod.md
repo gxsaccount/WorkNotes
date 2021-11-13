@@ -64,7 +64,7 @@ systemd 那样拥有进程管理的功能。比如，你的应用是一个 Java 
 出的时候，你该怎么知道呢？这个进程退出后的垃圾收集工作，又应该由谁去做呢？   
 
 
-## pod的实现原理##  
+## pod的实现原理 ##  
 Pod 里的所有容器，共享的是同一个 Network Namespace，并且可以声明共享同一个
 Volume  
 通过docker的“docker run --net=B --volumes-from=B --name=A image-A ...“也能实现相似的功能  
@@ -126,4 +126,43 @@ sidecar 指的就是我们可以在一个 Pod 中，启动一个辅助容器，�
 Pod 的另一个重要特性是，它的所有容器都共享同一个 Network Namespace。这就
 使得很多与 Pod 网络相关的配置和管理，也都可以交给 sidecar 完成，而完全无须干涉用户容器。
 这里最典型的例子莫过于 Istio 这个微服务治理项目了。  
+
+
+
+## Pod和Container的界限 ##  
+凡是调度、网络、存储，以及安全相关的属性，基本上是 Pod 级别的  
+它们描述的是“机器”这个整体，而不是里面运行的“程序”。比如，配
+置这个“机器”的网卡（即：Pod 的网络定义），配置这个“机器”的磁盘（即：Pod 的存储定
+义），配置这个“机器”的防火墙（即：Pod 的安全定义）。更不用说，这台“机器”运行在哪个
+服务器之上（即：Pod 的调度）。  
+
+
+## Pod 的状态 ##  
+ Pod API 对象的Status 部分，，pod.status.phase，就是 Pod 的当前状态  
+            
+            1. Pending。这个状态意味着，Pod 的 YAML 文件已经提交给了 Kubernetes，API 对象已经被
+            创建并保存在 Etcd 当中。但是，这个 Pod 里有些容器因为某种原因而不能被顺利创建。比
+            如，调度不成功。
+            2. Running。这个状态下，Pod 已经调度成功，跟一个具体的节点绑定。它包含的容器都已经创
+            建成功，并且至少有一个正在运行中。
+            3. Succeeded。这个状态意味着，Pod 里的所有容器都正常运行完毕，并且已经退出了。这种情
+            况在运行一次性任务时最为常见。
+            4. Failed。这个状态下，Pod 里至少有一个容器以不正常的状态（非 0 的返回码）退出。这个状
+            态的出现，意味着你得想办法 Debug 这个容器的应用，比如查看 Pod 的 Events 和日志。
+            5. Unknown。这是一个异常状态，意味着 Pod 的状态不能持续地被 kubelet 汇报给 kube-apiserver，这很有可能是主从节点（Master 和 Kubelet）间的通信出现了问题。
+ Pod 对象的 Status 字段，还可以再细分出一组 Conditions，这些细分状态的值包
+括：PodScheduled、Ready、Initialized，以及 Unschedulable。它们主要用于描述造成当前
+Status 的具体原因是什么   
+Pod 当前的 Status 是 Pending，对应的 Condition 是 Unschedulable，这就意味着它的调
+度出现了问题。
+而其中，Ready 这个细分状态非常值得我们关注：它意味着 Pod 不仅已经正常启动（Running 状
+态），而且已经可以对外提供服务了。这两者之间（Running 和 Ready）是有区别的，你不妨仔细
+思考一下。
+Pod 的这些状态信息，是我们判断应用运行情况的重要标准，尤其是 Pod 进入了非“Running”状
+态后，你一定要能迅速做出反应，根据它所代表的异常情况开始跟踪和定位，而不是去手忙脚乱地
+查阅文档。   
+
+GOPATH/src/k8s.io/kubernetes/vendor/k8s.io/api/core/v1/types.go  
+
+ 
 
