@@ -136,8 +136,25 @@ Pod 的另一个重要特性是，它的所有容器都共享同一个 Network N
 义），配置这个“机器”的防火墙（即：Pod 的安全定义）。更不用说，这台“机器”运行在哪个
 服务器之上（即：Pod 的调度）。  
 
+## Lifecycle ##  
+定义的是 Container Lifecycle Hooks。顾名思义，Container
+Lifecycle Hooks 的作用，是在容器状态发生变化时触发一系列“钩子”。  
 
-## Pod 的状态 ##  
+postStart 吧。它指的是，在容器启动后，立刻执行一个指定的操作。需要明确的是，
+postStart 定义的操作，虽然是在 Docker 容器 ENTRYPOINT 执行之后，但它并不严格保证顺序。
+也就是说，在 postStart 启动时，ENTRYPOINT 有可能还没有结束。
+当然，如果 postStart 执行超时或者错误，Kubernetes 会在该 Pod 的 Events 中报出该容器启动
+失败的错误信息，导致 Pod 也处于失败的状态。  
+
+，preStop 发生的时机，则是容器被杀死之前（比如，收到了 SIGKILL 信号）。而需要明
+确的是，preStop 操作的执行，是同步的。所以，它会阻塞当前的容器杀死流程，直到这个 Hook
+定义操作完成之后，才允许容器被杀死，这跟 postStart 不一样。
+所以，在这个例子中，我们在容器成功启动之后，在 /usr/share/message 里写入了一句“欢迎信
+息”（即 postStart 定义的操作）。而在这个容器被删除之前，我们则先调用了 nginx 的退出指令
+（即 preStop 定义的操作），从而实现了容器的“优雅退出”。  
+
+
+**Pod 的状态/Pod 生命周期的变化**  
  Pod API 对象的Status 部分，，pod.status.phase，就是 Pod 的当前状态  
             
             1. Pending。这个状态意味着，Pod 的 YAML 文件已经提交给了 Kubernetes，API 对象已经被
@@ -164,5 +181,61 @@ Pod 的这些状态信息，是我们判断应用运行情况的重要标准，�
 
 GOPATH/src/k8s.io/kubernetes/vendor/k8s.io/api/core/v1/types.go  
 
- 
 
+
+## Projected Volume ##  
+
+特殊 Volume 的作用，是为容器提供预先定义好的数据  
+到目前为止，Kubernetes 支持的 Projected Volume 一共有四种：
+      
+      1. Secret；把 Pod 想要访问的加密数据，存放到 Etcd 中。然后，你就可以通过在 Pod 的容器里挂载 Volume 的方式，访问到这些 Secret里保存的信息了。例如数据库的 Credential 信息
+      2. ConfigMap；ConfigMap 保存的是不需要加密的、应用所需的配置信息。而 ConfigMap 的用法几乎与 Secret 完全相同  
+      3. Downward API；声明了要暴露 Pod 的 metadata.labels 信息给容器。  
+      4. ServiceAccountToken。一种特殊的 Secret，就是 Kubernetes 系统内置的一种“服务账户”，它是 Kubernetes进行权限分配的对象。   
+ 
+## 容器健康检查和恢复机制 ##  
+在 Kubernetes 中，你可以为 Pod 里的容器定义一个健康检查“探针”（Probe）。这样，
+kubelet 就会根据这个 Probe 的返回值决定这个容器的状态，而不是直接以容器进行是否运行（来
+自 Docker 返回的信息）作为依据。这种机制，是生产环境中保证应用健康存活的重要手段。  
+
+ Kubernetes 里的Pod 恢复机制，也叫 restartPolicy。它是 Pod 的 Spec 部分的一个
+标准字段（pod.spec.restartPolicy），默认值是 Always，即：任何时候这个容器发生了异常，它
+一定会被重新创建。
+Pod 的恢复过程，永远都是发生在当前节点上，而不会跑到别的节点上去。事
+实上，一旦一个 Pod 与一个节点（Node）绑定，除非这个绑定发生了变化（pod.spec.node 字段
+被修改），否则它永远都不会离开这个节点。这也就意味着，如果这个宿主机宕机了，这个 Pod 也
+不会主动迁移到其他节点上去。
+
+restartPolicy：
+
+            Always：在任何情况下，只要容器不在运行状态，就自动重启容器；
+            OnFailure: 只在容器 异常时才自动重启容器；
+            Never: 从来不重启容器。  
+
+**restartPolicy 和 Pod 里容器的状态，以及 Pod 状态的对应关系**  
+1. 只要 Pod 的 restartPolicy 指定的策略允许重启异常的容器（比如：Always），那么这个 Pod
+就会保持 Running 状态，并进行容器重启。否则，Pod 就会进入 Failed 状态 。
+2. 对于包含多个容器的 Pod，只有它里面所有的容器都进入异常状态后，Pod 才会进入 Failed 状
+态。在此之前，Pod 都是 Running 状态。此时，Pod 的 READY 字段会显示正常容器的个数，  
+
+ readinessProbe 字段。虽然它的用法与 livenessProbe
+类似，但作用却大不一样。readinessProbe 检查结果的成功与否，决定的这个 Pod 是不是能被通
+过 Service 的方式访问到，而并不影响 Pod 的生命周期。  
+
+## Pod 预设置 ##  
+ PodPreset功能可以为Pod 添加的 labels、env、volumes 和
+volumeMount 的定义，它们的配置跟 PodPreset 的内容一样。此外，Pod 还会被自动加上  
+一个 annotation 表示这个 Pod 对象被 PodPreset 改动过。  
+
+如果你定义了同时作用于一个 Pod 对象的多个 PodPreset  
+Kubernetes 项目会帮你合并（Merge）这两个 PodPreset 要做的修改。而如果它们要做
+的修改有冲突的话，这些冲突字段就不会被修改。  
+
+
+
+## 总结 ##  
+Kubernetes“一切皆对象”的设计思想：比如应
+用是 Pod 对象，应用的配置是 ConfigMap 对象，应用要访问的密码则是 Secret 对象。  
+ PodPreset 这样专门用来对 Pod 进行批量化、自动化修改的工具对象。  
+ 
+ 
