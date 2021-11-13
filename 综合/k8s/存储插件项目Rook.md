@@ -6,3 +6,7 @@
 由于 Kubernetes 本身的松耦合设计，绝大多数存储项目，比如 Ceph、GlusterFS、NFS 等，都可
 以为 Kubernetes 提供持久化存储能力。在这次的部署实战中，我会选择部署一个很重要的
 Kubernetes 存储插件项目：Rook。
+
+
+kubectl apply -f https://raw.githubusercontent.com/rook/rook/master/cluster/examples/kubernetes 
+kubectl apply -f https://raw.githubusercontent.com/rook/rook/master/cluster/examples/kubernetes
