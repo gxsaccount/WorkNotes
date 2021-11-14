@@ -122,6 +122,15 @@ StatefulSet 的设计其实非常容易理解。它把真实世界里的应用�
 所以，StatefulSet 的核心功能，就是通过某种方式记录这些状态，然后在 Pod 被重新创建时，能够为新 Pod 恢复这些状态   
 
 ## StatefulSet如何维护拓扑状态 ##  
+StatefulSet 用来管理有状态的应用，其会为每一个 Pod 维护一个 sticky identity，这些 Pod 从同一个 Spec 创建，但拥有自己唯一的网络标识、持久存储，会有序的扩容、部署。
+
+限制：
+  
+  1.必须挂载持久存储
+  2.必须有一个 headless service 去响应 Pods 的网络标识。（因为 headless service 没有 ClusterIP，所以只能通过域名访问，通过 API 调用能拿到域名后边的一串 Pod IP，通过域名调用会选择第一个 Pod IP，而不会做负载均衡）
+  3.扩缩容将不删除与 StatefulSet 关联的 volumes，确保数据安全。  
+
+
 **Headless Service**：有clusterIP: None的Service，可以直接得到pod的IP而不是service的（详见service），这样只要你知道了一个 Pod 的名字，以及它对应的 Service 的名字，你
 就可以非常确定地通过这条 DNS 记录访问到 Pod 的 IP 地址  
 创建了一个 Headless Service 之后，它所代理的所有 Pod 的 IP 地址，都
