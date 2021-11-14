@@ -243,6 +243,8 @@ PV。
 数据。
 通过这种方式，Kubernetes 的 StatefulSet 就实现了对应用存储状态的管理。  
 
+## 版本管理 ##  
+ControllerRevision  具体见DaemonSet相关介绍  
 
 **总结！！！**  
 首先，StatefulSet 的控制器直接管理的是 Pod。这是因为，StatefulSet 里的不同 Pod 实例，
