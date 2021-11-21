@@ -172,7 +172,7 @@ API对象在Etcd里的完整路径由**Group/Version\/Resource**组成，整个 
 
 ## Kubernetes 如何对 Resource、Group 和 Version 进行解析 ##  
 
-**1. 首先匹配API对象**  
+**1.首先匹配API对象**  
 * 匹配组  
 Pod  Node等核心API对象是不需要Group的 它们的Group是"" 直接从/api开始查找    
 而对于 CronJob 等非核心 API 对象来说，Kubernetes 就必须在 /apis 这个层级里查找它对应的 Group，进而根据“batch”这个 Group 的名字，找到 /apis/batch    
@@ -181,7 +181,7 @@ Pod  Node等核心API对象是不需要Group的 它们的Group是"" 直接从/ap
 然后，Kubernetes 会进一步匹配到 API 对象的版本号。   
 **同一种API对象可以有多个Version k8s进行API版本化的重要手段**  
 * 匹配资源类型  
-**2. 根据完整路径找到k8s的类型定义后使用用户提交的YAML文件中的字段创建一个实例**  
+**2.根据完整路径找到k8s的类型定义后使用用户提交的YAML文件中的字段创建一个实例**  
      ![image](https://user-images.githubusercontent.com/20179983/142756885-f9364dff-4e9d-446e-a1d7-8e80c2a62be5.png)
 * 当我们发起了创建 CronJob 的 POST 请求之后，我们编写的 YAML 的信息就被提交给了 APIServer。
 * APIServer 的第一个功能，就是过滤这个请求，并完成一些前置性的工作，比如授权、超时处理、审计等。
@@ -190,7 +190,7 @@ Pod  Node等核心API对象是不需要Group的 它们的Group是"" 直接从/ap
     - 在这个过程中，APIServer 会进行一个 Convert 工作，即：把用户提交的 YAML 文件，转换成一个叫作 **Super Version** 的对象，它正是该 API 资源类型所有版本的字段全集。这样用户提交的不同版本的 YAML 文件，就都可以用这个 Super Version 对象来进行处理了。  
     - 接下来，APIServer 会先后进行 Admission() （例如initializer）和 Validation() (检验合法性)操作。  
     - **这个被验证过的 API 对象，都保存在了 APIServer 里一个叫作 Registry 的数据结构中**。也就是说，只要一个 API 对象的定义能在 Registry 里查到，它就是一个有效的 Kubernetes API 对象。  
-* 3.APIServer 会把验证过的 API 对象转换成用户最初提交的版本，进行序列化操作，并调用 Etcd 的 API 把它保存起来  
+3.APIServer 会把验证过的 API 对象转换成用户最初提交的版本，进行序列化操作，并调用 **Etcd** 的 API 把它保存起来  
 
 
 
