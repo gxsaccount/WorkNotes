@@ -187,9 +187,9 @@ Pod  Node等核心API对象是不需要Group的 它们的Group是"" 直接从/ap
 * APIServer 的第一个功能，就是过滤这个请求，并完成一些前置性的工作，比如授权、超时处理、审计等。
 * 请求会进入 MUX 和 Routes 流程MUX 和Routes 是 APIServer 完成 URL 和 Handler 绑定的场所。而 APIServer 的 Handler 要做的事情，就是按照我刚刚介绍的匹配过程，找到对应的 CronJob 类型定义  
 * 根据这个 CronJob 类型定义，使用用户提交的 YAML文件里的字段，创建一个 CronJob 对象。  
- - 在这个过程中，APIServer 会进行一个 Convert 工作，即：把用户提交的 YAML 文件，转换成一个叫作 **Super Version** 的对象，它正是该 API 资源类型所有版本的字段全集。这样用户提交的不同版本的 YAML 文件，就都可以用这个 Super Version 对象来进行处理了。  
- - 接下来，APIServer 会先后进行 Admission() （例如initializer）和 Validation() (检验合法性)操作。  
- - **这个被验证过的 API 对象，都保存在了 APIServer 里一个叫作 Registry 的数据结构中**。也就是说，只要一个 API 对象的定义能在 Registry 里查到，它就是一个有效的 Kubernetes API 对象。  
+    - 在这个过程中，APIServer 会进行一个 Convert 工作，即：把用户提交的 YAML 文件，转换成一个叫作 **Super Version** 的对象，它正是该 API 资源类型所有版本的字段全集。这样用户提交的不同版本的 YAML 文件，就都可以用这个 Super Version 对象来进行处理了。  
+    - 接下来，APIServer 会先后进行 Admission() （例如initializer）和 Validation() (检验合法性)操作。  
+    - **这个被验证过的 API 对象，都保存在了 APIServer 里一个叫作 Registry 的数据结构中**。也就是说，只要一个 API 对象的定义能在 Registry 里查到，它就是一个有效的 Kubernetes API 对象。  
 * APIServer 会把验证过的 API 对象转换成用户最初提交的版本，进行序列化操作，并调用 Etcd 的 API 把它保存起来  
 
 
