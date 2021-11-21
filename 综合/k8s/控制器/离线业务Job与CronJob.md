@@ -32,7 +32,10 @@
 
       $ kubectl create -f job.yaml   
  
-      $ kubectl describe jobs/pi
+      $ kubectl describe jobs/pi  
+      
+CronJob是定期产生新的Job，还是定期重启同一个Job任务？  
+
       Name: pi
       Namespace: default
       Selector: controller-uid=c2db599a-2c9d-11e6-b324-0209dc45a495  
@@ -251,5 +254,7 @@ startingDeadlineSeconds=200，意味着在过去 200 s 里，如果 miss 的数�
  parallelism: 4
  completions: 2  
  那么，这个 Job 最开始创建的时候，会同时启动几个 Pod 呢？原因是什么？  
- 
+
+CronJob是定期产生新的Job，还是定期重启同一个Job任务？  
+
  
