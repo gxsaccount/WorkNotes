@@ -69,7 +69,7 @@ Role 本身就是一个 Kubernetes 的 API 对象，是一个namespace对象，�
       namespace: mynamespace
       name: example-role
     rules:
-    - apiGroups: [""]
+    - apiGroups: [""]  # "" indicates the core API group
       resources: ["pods"]
       verbs: ["get", "watch", "list"]  
 
