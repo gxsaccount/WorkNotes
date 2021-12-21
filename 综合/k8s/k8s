@@ -1,0 +1,45 @@
+https://kubernetes.io/zh/docs/concepts/overview/working-with-objects/kubernetes-objects/  
+https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md  api约定
+spec 的对象，你必须在创建对象时设置其内容，描述你希望对象所具有的特征： 期望状态（Desired State） 。
+
+status 描述了对象的 当前状态（Current State）  
+
+apiVersion - 创建该对象所使用的 Kubernetes API 的版本
+kind - 想要创建的对象的类别
+metadata - 帮助唯一性标识对象的一些数据，包括一个 name 字符串、UID 和可选的 namespace  
+
+。 Kubernetes API 参考 能够帮助我们找到任何我们想创建的对象的规约格式。https://kubernetes.io/docs/reference/kubernetes-api/  
+
+
+对象名称和 IDs
+集群中的每一个对象都有一个名称 来标识在同类资源中的唯一性。
+
+每个 Kubernetes 对象也有一个UID 来标识在整个集群中的唯一性。
+
+比如，在同一个名字空间 中有一个名为 myapp-1234 的 Pod, 但是可以命名一个 Pod 和一个 Deployment 同为 myapp-1234.
+
+对于用户提供的非唯一性的属性，Kubernetes 提供了 标签（Labels）和 注解（Annotation）机制。
+
+名称   
+
+UIDs
+Kubernetes 系统生成的字符串，唯一标识对象。
+
+在 Kubernetes 集群的整个生命周期中创建的每个对象都有一个不同的 uid，它旨在区分类似实体的历史事件。
+
+Kubernetes UIDs 是全局唯一标识符（也叫 UUIDs）。 UUIDs 是标准化的，见 ISO/IEC 9834-8 和 ITU-T X.667   
+
+namespace  
+Kubernetes 会创建四个初始名字空间：
+
+default 没有指明使用其它名字空间的对象所使用的默认名字空间
+kube-system Kubernetes 系统创建对象所使用的名字空间
+kube-public 这个名字空间是自动创建的，所有用户（包括未经过身份验证的用户）都可以读取它。 这个名字空间主要用于集群使用，以防某些资源在整个集群中应该是可见和可读的。 这个名字空间的公共方面只是一种约定，而不是要求。
+kube-node-lease 此名字空间用于与各个节点相关的 租约（Lease）对象。 节点租期允许 kubelet 发送心跳，由此控制面能够检测到节点故障。
+
+
+当你创建一个服务 时， Kubernetes 会创建一个相应的 DNS 条目。
+
+该条目的形式是 <服务名称>.<名字空间名称>.svc.cluster.local，这意味着如果容器只使用 <服务名称>，它将被解析到本地名字空间的服务。这对于跨多个名字空间（如开发、分级和生产） 使用相同的配置非常有用。如果你希望跨名字空间访问，则需要使用完全限定域名（FQDN）。
+
+
