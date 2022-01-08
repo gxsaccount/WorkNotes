@@ -2,21 +2,21 @@
 # Flexvolume 的原理和使用方法 #   
 对于一个 FlexVolume 类型的 PV 来说，它的 YAML 文件如下所示：  
 
-apiVersion: v1
-kind: PersistentVolume  
-metadata:
- name: pv-flex-nfs
-spec:
- capacity:
-    storage: 10Gi
- accessModes:
-    - ReadWriteMany
- flexVolume:
-   driver: "k8s/nfs"
-   fsType: "nfs"
-   options:
-     server: "10.10.0.25" # 改成你自己的 NFS 服务器地址
-     share: "export"  
+  apiVersion: v1
+  kind: PersistentVolume  
+  metadata:
+   name: pv-flex-nfs
+  spec:
+   capacity:
+      storage: 10Gi
+   accessModes:
+      - ReadWriteMany
+   flexVolume:
+     driver: "k8s/nfs"
+     fsType: "nfs"
+     options:
+       server: "10.10.0.25" # 改成你自己的 NFS 服务器地址
+       share: "export"  
 
 这个 PV 定义的 Volume 类型是 flexVolume。并且，我们指定了这个 Volume 的driver 叫作 k8s/nfs。  
 而 Volume 的 options 字段，则是一个自定义字段。也就是说，它的类型，其实是
