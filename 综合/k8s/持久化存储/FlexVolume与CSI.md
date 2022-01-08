@@ -54,9 +54,9 @@ Dynamic Provisioning（即：为每个 PVC 自动创建 PV 和对应的 Volume�
 
 # CSI #  
 
-CSI 插件体系的设计思想，就是把这个 Provision 阶段，以及 Kubernetes 里的一部
+**CSI 插件体系的设计思想，就是把这个 Provision 阶段，以及 Kubernetes 里的一部
 分存储管理功能，从主干代码里剥离出来，做成了几个单独的组件。这些组件会通过 Watch
-API 监听 Kubernetes 里与存储相关的事件变化，比如 PVC 的创建，来执行具体的存储管理动
+API 监听 Kubernetes 里与存储相关的事件变化**，比如 PVC 的创建，来执行具体的存储管理动
 作。
 而这些管理动作，比如“Attach 阶段”和“Mount 阶段”的具体操作，实际上就是通过调用
 CSI 插件来完成的。  
@@ -73,12 +73,12 @@ Identity、CSI Controller 和 CSI Node。
 
 ## External Components ##  
 ### Driver Registrar ###  
-Driver Registrar 组件，负责将插件注册到 kubelet 里面（这可以类比为，将可执行文件
-放在插件目录下）。而在具体实现上，Driver Registrar 需要请求 CSI 插件的 Identity 服务来
+**Driver Registrar 组件，负责将插件注册到 kubelet 里面（这可以类比为，将可执行文件
+放在插件目录下）**。而在具体实现上，Driver Registrar 需要请求 CSI 插件的 Identity 服务来
 获取插件信息  
   
 ### External Provisioner ###  
-负责的正是 Provision 阶段。在具体实现上，External
+**External Provisioner负责的正是 Provision 阶段**。在具体实现上，External
 Provisioner 监听（Watch）了 APIServer 里的 PVC 对象。当一个 PVC 被创建时，它就会调用
 CSI Controller 的 CreateVolume 方法，为你创建对应 PV。
 此外，如果你使用的存储是公有云提供的磁盘（或者块设备）的话，这一步就需要调用公有云
@@ -88,23 +88,24 @@ Kubernetes 定义的 PV 类型，而是会自己定义一个单独的 Volume 类
 
 ### External Attacher ###  
 
-External Attacher 组件，负责的正是“Attach 阶段”。在具体实现上，它监听了
+**External Attacher 组件，负责的正是“Attach 阶段”**。在具体实现上，它监听了
 APIServer 里 VolumeAttachment 对象的变化。VolumeAttachment 对象是 Kubernetes 确
 认一个 Volume 可以进入“Attach 阶段”的重要标志，  
 一旦出现了 VolumeAttachment 对象，External Attacher 就会调用 CSI Controller 服务的
 ControllerPublish 方法，完成它所对应的 Volume 的 Attach 阶段。  
 
+### 关于Mount阶段 ###  
 而 Volume 的“Mount 阶段”，并不属于 External Components 的职责。当 kubelet 的
-VolumeManagerReconciler 控制循环检查到它需要执行 Mount 操作的时候，会通过
+**VolumeManagerReconciler** 控制循环检查到它需要执行 Mount 操作的时候，会通过
 pkg/volume/csi 包，直接调用 CSI Node 服务完成 Volume 的“Mount 阶段”。
-在实际使用 CSI 插件的时候，我们会将这三个 External Components 作为 sidecar 容器和 CSI
+**在实际使用 CSI 插件的时候，我们会将这三个 External Components 作为 sidecar 容器和 CSI
 插件放置在同一个 Pod 中。由于 External Components 对 CSI 插件的调用非常频繁，所以这
-种 sidecar 的部署方式非常高效。  
+种 sidecar 的部署方式非常高效。**    
 
 
  ## CSI 插件服务  ##   
  ### CSI Identity ###  
- CSI 插件的 CSI Identity 服务，负责对外暴露这个插件本身的信息，如下所示：  
+ **CSI 插件的 CSI Identity 服务，负责对外暴露这个插件本身的信息**，如下所示：  
    
    service Identity {
       // return the version and name of the plugin
@@ -121,8 +122,8 @@ pkg/volume/csi 包，直接调用 CSI Node 服务完成 Volume 的“Mount 阶�
 
 
 ### CSI Controller ###  
-CSI Controller 服务，定义的则是对 CSI Volume（对应 Kubernetes 里的 PV）的管理接
-口，比如：创建和删除 CSI Volume、对 CSI Volume 进行 Attach/Dettach（在 CSI 里，这个
+**CSI Controller 服务，定义的则是对 CSI Volume（对应 Kubernetes 里的 PV）的管理接口**   
+比如：创建和删除 CSI Volume、对 CSI Volume 进行 Attach/Dettach（在 CSI 里，这个
 操作被叫作 Publish/Unpublish），以及对 CSI Volume 进行 Snapshot 等，它们的接口定义
 如下所示：   
 
@@ -168,7 +169,7 @@ VolumeAttachement 对象，来跟 Kubernetes 进行协作。
 
 
  ### CSI Volume ###   
- CSI Volume 需要在宿主机上执行的操作，都定义在了 CSI Node 服务里面，如下所示：  
+**CSI Volume 需要在宿主机上执行的操作**，都定义在了 CSI Node 服务里面，如下所示：  
  
     service Node {
     // temporarily mount the volume to a staging path
