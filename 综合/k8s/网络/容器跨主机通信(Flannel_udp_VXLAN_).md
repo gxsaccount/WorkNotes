@@ -15,6 +15,7 @@
 
 
 # Flannel 项目 #  
+https://blog.csdn.net/u010039418/article/details/90451081  
 Flannel 项目本身只是一个框架，真正为我们提供容器网络功能的，是 Flannel 的后端实现。目前，Flannel 支持三种后端实现，分别是：
     
     1. VXLAN；
@@ -39,7 +40,59 @@ Flannel 在不同宿主机上的两个容器之间打通了一条“隧道”，
 的过程，也都是在用户态完成的**。  
 在 Linux 操作系统中，上述这些上下文切换和用户态操作的代价其实是比较高的，这也正是造成 Flannel UDP 模式性能不好的主要原因     
 
-**实例：**    
+**实例1**  
+![image](https://user-images.githubusercontent.com/20179983/149625675-e8e93591-4f47-471a-ba1b-69fb50b56697.png)  
+
+我们以发送icmp报文为例：  
+
+1、容器A发出ICMP请求报文：10.3.3.2 -> 10.3.83.2，根据容器A内的路由表，报文将发送到网关10.3.3.1，即docker0设备。  
+
+        [root@container-a /]# route -n
+        Kernel IP routing table
+        Destination     Gateway         Genmask         Flags Metric Ref    Use Iface
+        0.0.0.0         10.3.3.1        0.0.0.0         UG    0      0        0 eth0
+        10.3.3.0        0.0.0.0         255.255.255.0   U     0      0        0 eth0
+
+2、此时docker0再根据主机A上的路由表，报文将送到flannel0设备(10.3.3.0)。  
+
+        [root@HOST-A ~]# route -n
+        Kernel IP routing table
+        Destination     Gateway         Genmask         Flags Metric Ref    Use Iface
+        0.0.0.0         192.168.52.2    0.0.0.0         UG    100    0        0 ens33
+        10.3.0.0        0.0.0.0         255.255.0.0     U     0      0        0 flannel0
+        10.3.3.0        0.0.0.0         255.255.255.0   U     0      0        0 docker0
+        192.168.52.0    0.0.0.0         255.255.255.0   U     100    0        0 ens33
+
+3、flannel0是一个tun设备，工作在三层，因此flannel0接收到的是一个RAW IP包(无MAC信息)。    
+随后，flanneld进程将接收报文，然后通过查询etcd数据库，根据目的容器IP，确定目的主机IP，最后进行UDP的封包。    
+**加上8个字节的UDP头，再加上20个字节的IP头**：192.168.52.129:8285 -> 192.168.52.145:8285，发送给对端目标主机的flanneld进程。    
+正是因为封包的UDP头和IP头，flannel网络设备的MTU为1472(1500-28)，避免因为数据报文超过ens33的MTU而丢包。    
+
+        flannel0: flags=4305<UP,POINTOPOINT,RUNNING,NOARP,MULTICAST>  mtu 1472
+
+4、flanneld进程将打包好的UDP报文根据主机路由表发往ens33网卡。  
+
+5、主机A通过ens33网卡将UDP报文通过网络传输到主机B的ens33网卡。  
+
+6、主机B查询报文目的端口为8285(flanneld监听端口)，因此将报文递交给flanneld进程。  
+
+        [root@HOST-B /]# netstat -anup | grep flanneld
+        udp        0      0 192.168.52.145:8285     0.0.0.0:*            2778/flanneld
+
+7、flanneld进程将报文解包，得到真正的ICMP请求报文：10.3.3.2 -> 10.3.83.2。  
+
+8、flannel0设备根据目标ip 10.3.83.2，匹配主机B的路由表，将解包后的报文递交给docker0。  
+
+        [root@HOST-B /]# route -n
+        Kernel IP routing table
+        Destination     Gateway         Genmask         Flags Metric Ref    Use Iface
+        0.0.0.0         192.168.52.2    0.0.0.0         UG    0      0        0 ens33
+        10.3.0.0        0.0.0.0         255.255.0.0     U     0      0        0 flannel0
+        10.3.83.0       0.0.0.0         255.255.255.0   U     0      0        0 docker0
+        192.168.52.0    0.0.0.0         255.255.255.0   U     0      0        0 ens33
+
+9、docker0最终将报文提交给容器B，10.3.83.2，处理完ICMP请求报文后，原路径发送ICMP应答报文。  
+**实例2：**    
 现在有两台宿主机。  
 
     宿主机 Node 1 上有一个容器 container-1，
@@ -50,13 +103,18 @@ Flannel 在不同宿主机上的两个容器之间打通了一条“隧道”，
     它的 IP 地址是 100.96.2.3，
     对应的 docker0 网桥的地址是：100.96.2.1/24。  
 
+
 **目的：**  
-让 container-1 访问 container-2，即让源地址 100.96.1.2，目的地址就是100.96.2.3的IP包能正常转发。      
+让 container-1 访问 container-2，即让源地址 100.96.1.2，目的地址就是100.96.2.3的IP包能正常转发。   
+
 **发送步骤**  
-* 容器将数据包发送到虚拟网卡，通过Veth Pair同时发到docker0  
-* docker0将数据包路由到flannel0    
-目的地址 100.96.2.3 并不在 Node 1 的 docker0 网桥的网段里，所以这个 IP 包会被交给默认路由规则，通过容器的网关进入 docker0 网桥（如果是同一台宿主机上的容器间通
-信，走的是直连规则）。  
+
+
+
+
+* 容器将数据包发送到容器的虚拟网卡，根据容器A内的路由表，通过Veth Pair同时发到docker0  
+目的地址 100.96.2.3 并不在 Node 1 的 docker0 网桥的网段里，所以这个 IP 包会被交给默认路由规则，通过容器的网关进入 docker0 网桥（如果是同一台宿主机上的容器间通信，走的是直连规则）。 
+* docker0根据主机A上的路由表，将数据包路由到flannel0    
 Flannel会在宿主机上创建出了一系列的路由规则，以 Node 1 为例，如下所示：  
 
         # 在 Node 1 上
@@ -65,8 +123,7 @@ Flannel会在宿主机上创建出了一系列的路由规则，以 Node 1 为�
         100.96.0.0/16 dev flannel0 proto kernel scope link src 100.96.1.0
         100.96.1.0/24 dev docker0 proto kernel scope link src 100.96.1.1
         10.168.0.0/24 dev eth0 proto kernel scope link src 10.168.0.2    
-
-由目的地址100.96.2.3进行路由回到flannel0上  
+ 
 IP 包的目的地址是 100.96.2.3，匹配不到本机 docker0 网桥对应的100.96.1.0/24 网段，只能匹配到第二条、也就是 100.96.0.0/16 对应的这条路由规则，从而进入到一个叫作 flannel0 的TUN 设备中。  
 
 * flannel0封装UDP传递给内核    
