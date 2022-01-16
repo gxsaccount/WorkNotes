@@ -259,6 +259,9 @@ UDP 包是一个四层数据包，所以 Linux 内核会在它前面加上一个
 
 ![4b70782a15016fffaad078ca969eadc](https://user-images.githubusercontent.com/20179983/148676796-875bc7bb-de17-485c-9487-0ed80c380d7d.png)
 
+![image](https://user-images.githubusercontent.com/20179983/149644563-22e3f3ef-bde3-4b6e-80bb-7acc2be491bb.png)
+VXLAN首部的格式如下：
+![image](https://user-images.githubusercontent.com/20179983/149644574-6fa3242a-4c0c-47cf-88eb-0d03fc009348.png)
 
 接下来，Node 1 上的 flannel.1 设备就可以把这个数据帧从 Node 1 的 eth0 网卡发出去。  
 显然，这个帧会经过宿主机网络来到 Node 2 的 eth0 网卡。  
