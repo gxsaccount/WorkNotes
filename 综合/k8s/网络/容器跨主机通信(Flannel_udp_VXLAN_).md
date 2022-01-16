@@ -259,10 +259,8 @@ UDP 包是一个四层数据包，所以 Linux 内核会在它前面加上一个
 
 ![4b70782a15016fffaad078ca969eadc](https://user-images.githubusercontent.com/20179983/148676796-875bc7bb-de17-485c-9487-0ed80c380d7d.png)
 
-https://cloud.tencent.com/developer/article/1651126
-![image](https://user-images.githubusercontent.com/20179983/149644563-22e3f3ef-bde3-4b6e-80bb-7acc2be491bb.png)
-VXLAN首部的格式如下：
-![image](https://user-images.githubusercontent.com/20179983/149644574-6fa3242a-4c0c-47cf-88eb-0d03fc009348.png)
+
+
 
 接下来，Node 1 上的 flannel.1 设备就可以把这个数据帧从 Node 1 的 eth0 网卡发出去。  
 显然，这个帧会经过宿主机网络来到 Node 2 的 eth0 网卡。  
@@ -275,6 +273,19 @@ VXLAN首部的格式如下：
 **VXLAN有IP包发出过程有1次用户态与内核态之间的数据拷贝**  
 第一次：用户态的容器进程发出的 IP 包经过 docker0 网桥进入内核态；
 
+
+**补**  
+
+https://cloud.tencent.com/developer/article/1651126
+![image](https://user-images.githubusercontent.com/20179983/149644563-22e3f3ef-bde3-4b6e-80bb-7acc2be491bb.png)
+VXLAN首部的格式如下：
+![image](https://user-images.githubusercontent.com/20179983/149644574-6fa3242a-4c0c-47cf-88eb-0d03fc009348.png)
+对于处于同一个VXLAN的两台虚拟终端，其通信过程可以概括为如下的步骤：  
+发送方向接收方发送数据帧，帧中包含了发送方和接收方的虚拟MAC地址。  
+发送方连接的VTEP节点收到了数据帧，通过查找发送方所在的VXLAN以及接收方所连接的VTEP节点，将该报文添加VXLAN首部、外部UDP首部、外部IP首部后，发送给目的VTEP节点。  
+报文经过物理网络传输到达目的VTEP节点。  
+目的VTEP节点接收到报文后，拆除报文的外部IP首部和外部UDP首部，检查报文的VNI以及内部数据帧的目的MAC地址，确认接收方与本VTEP节点相连后，拆除VXLAN首部，将内部数据帧交付给接收方。  
+接收方收到数据帧，传输完成。  
 
 ## VXLAN与udp区别 ##  
 主要在数据包封装方式和获取mac地址方法  
