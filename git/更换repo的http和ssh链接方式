@@ -1,0 +1,18 @@
+https://stackoverflow.com/questions/11200237/how-do-i-get-git-to-default-to-ssh-and-not-https-for-new-repositories  
+
+Set up a repository's origin branch to be SSH
+The GitHub repository setup page is just a suggested list of commands (and GitHub now suggests using the HTTPS protocol). Unless you have administrative access to GitHub's site, I don't know of any way to change their suggested commands.
+
+If you'd rather use the SSH protocol, simply add a remote branch like so (i.e. use this command in place of GitHub's suggested command). To modify an existing branch, see the next section.
+
+$ git remote add origin git@github.com:nikhilbhardwaj/abc.git
+Modify a pre-existing repository
+As you already know, to switch a pre-existing repository to use SSH instead of HTTPS, you can change the remote url within your .git/config file.
+
+[remote "origin"]
+    fetch = +refs/heads/*:refs/remotes/origin/*
+    -url = https://github.com/nikhilbhardwaj/abc.git
+    +url = git@github.com:nikhilbhardwaj/abc.git
+A shortcut is to use the set-url command:
+
+$ git remote set-url origin git@github.com:nikhilbhardwaj/abc.git
