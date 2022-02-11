@@ -2,15 +2,15 @@ select/poll/epoll用法
  
 接口：
 
-  int select{
-      int n,// 待测试的描述符数量+1  
-      fd_set *readset,//读描述符集合
-      fd_set *readset,//写描述符集合
-      fd_set *readset,//异常描述符集合
-      const struct timeval *timeout
-    }
+    int select{
+        int n,// 待测试的描述符数量+1  
+        fd_set *readset,//读描述符集合
+        fd_set *readset,//写描述符集合
+        fd_set *readset,//异常描述符集合
+        const struct timeval *timeout
+      }
 
-使用：  
+使用流程：  
 1.告诉内核你对哪些fd感兴趣  
 2.内核将遍历这些fd，将准备就绪的bitmap返还给你  
 3.你遍历这些bitmap得到就绪的fd  
