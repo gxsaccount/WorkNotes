@@ -101,5 +101,90 @@ ptr3 = std::move(ptr1);                  // OK，可以
 smart_ptr<shape> ptr4{std::move(ptr3)};  // OK，可以
 
 
-//shared_ptr   
+//shared_ptr不考虑线程安全问题   
+//接口
+class shared_count {
+public:
+  shared_count();
+  void add_count();
+  long reduce_count();
+  long get_count() const;
+};
+//实现  
+class shared_count {
+public:
+  shared_count() : count_(1) {}
+  void add_count()
+  {
+    ++count_;
+  }
+  long reduce_count()
+  {
+    return --count_;
+  }
+  long get_count() const
+  {
+    return count_;
+  }
+
+private:
+  long count_;
+};
+
+
+template <typename T> 
+class smart_ptr{
+    public:
+    template friend class smart_ptr;  //为了父子类型可以访问私有成员 
+    explicit smart_ptr(T* ptr=nullptr):ptr_(ptr){
+        if(ptr){
+            shared_count_ = new shared_count();
+        }
+    }
+    ~smart_ptr(){
+        if(ptr_ && !shared_count_ ->reduce_count()){
+            delete ptr_;
+            delete shared_count_;
+        }
+    }
+    smart_ptr(const smart_ptr& other){
+        ptr_=other.ptr_;
+        if(ptr_){
+            other.shared_count_->add_count();
+            shared_count_ = other.shared_count_;
+        }
+    }
+
+    template<class U> 
+    smart_ptr(const smart_ptr<U>& other){
+        ptr_=other.ptr_;
+        if(ptr_){
+            other.shared_count_->add_count();
+            shared_count_ = other.shared_count_;
+        }
+    }
+
+    template<class U> 
+    smart_ptr(const smart_ptr<U>&& other){
+        ptr_=other.ptr_;
+        if(ptr_){
+            shared_count_ = other.shared_count_;
+            other.ptr_ = nullptr;
+        }
+    }
+    smart_ptr& operator=(smart_ptr rhs) noexcept {//rhs临时变量，函数结束时释放  
+        rhs.swap(*this);
+        return *this;
+    }
+    void swap(smart_ptr& rhs) noexcept { using std::swap; swap(ptr_, rhs.ptr_); swap(shared_count_, rhs.shared_count_); }
+    T* get() const noexcept { return ptr_; }  
+    T& operator*(){return *ptr_;}
+    T* operator->(){return ptr_;}
+    operator bool() const noexcept { return ptr_; }
+    private: 
+    T* ptr_;
+    shared_count* shared_count_;
+}
+
+
 
