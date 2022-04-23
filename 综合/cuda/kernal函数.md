@@ -7,6 +7,16 @@ grid_size 和 block_size 分别代表了本次 kernel 启动对应的 block 数�
 sharedMemSize 设置动态share_memory的大小（如extern __shared__ int _s[];）  
 stream 设置streamid  
 
+threadIdx是一个uint3类型，表示一个线程的索引。
+
+blockIdx是一个uint3类型，表示一个线程块的索引，一个线程块中通常有多个线程。
+
+blockDim是一个dim3类型，表示线程块的大小。
+
+gridDim是一个dim3类型，表示网格的大小，一个网格中通常有多个线程块。  
+
+
+
 block_size 最大可以取 1024  
 同一个 block 中，连续的 32 个线程组成一个 warp，这 32 个线程每次执行同一条指令，也就是所谓的 SIMT，  
 即使最后一个 warp 中有效的线程数量不足 32，也要使用相同的硬件资源，所以 block_size 最好是 32 的整数倍  
