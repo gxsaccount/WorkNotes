@@ -1,9 +1,12 @@
 # 形式 #  
-  cuda_kernel<<<grid_size, block_size, 0, stream>>>(...)  
+  cuda_kernel<<<grid_size, block_size, sharedMemSize, stream>>>(...)  
 cuda_kernel 是 global function 的标识，(...) 中是调用 cuda_kernel 对应的参数，这两者和 C++ 的语法是一样的，  
-而 <<<grid_size, block_size, 0, stream>>> 是 CUDA 对 C++ 的扩展    
+而 <<<grid_size, block_size, sharedMemSize, stream>>> 是 CUDA 对 C++ 的扩展    
 
-grid_size 和 block_size 分别代表了本次 kernel 启动对应的 block 数量和每个 block 中 thread 的数量，所以显然两者都要大于 0。  
+grid_size 和 block_size 分别代表了本次 kernel 启动对应的 block 数量和每个 block 中 thread 的数量，所以显然两者都要大于 0。   
+sharedMemSize 设置动态share_memory的大小（如extern __shared__ int _s[];）  
+stream 设置streamid  
+
 block_size 最大可以取 1024  
 同一个 block 中，连续的 32 个线程组成一个 warp，这 32 个线程每次执行同一条指令，也就是所谓的 SIMT，  
 即使最后一个 warp 中有效的线程数量不足 32，也要使用相同的硬件资源，所以 block_size 最好是 32 的整数倍  
