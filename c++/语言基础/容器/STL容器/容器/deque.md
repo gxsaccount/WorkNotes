@@ -14,19 +14,20 @@ deque为了实现整体连续的假象，导致其实现起来比较繁琐，尽
 
 双向队列  
 分段连续
-（1）map（vector，扩容时copy到中间，可以前后放元素）+N（buffer/array）  
-迭代器走到边界跳到下一个buffer  
-迭代器结构：
-【cur，first，last，node】
-cur：迭代器指向当前buffer的元素index  
-first：buffer的起始  
-last：buffer的结束  
-node：buffer在map中位置  
+（1）map（vector，扩容时copy到中间，可以前后放元素）+N（buffer/array）    
+迭代器走到边界跳到下一个buffer   
+迭代器结构：  
+【cur，first，last，node】  
+cur：迭代器指向当前buffer的元素index    
+first：buffer的起始    
+last：buffer的结束    
+node：buffer在map中位置    
 
 
-重载的operator-实现访问时感觉连续  
-difference_type operator-(const self& x)const
-{
-   return difference_type(buffer_size()) * (node-x.node-1)+（cur-first）+（x.last-x.cur）;
-   //间隔buffer的总元素数量+当前元素数量+最后元素数量
-}
+重载的operator-实现访问时感觉连续    
+
+      difference_type operator-(const self& x)const
+      {
+         return difference_type(buffer_size()) * (node-x.node-1)+（cur-first）+（x.last-x.cur）;
+         //间隔buffer的总元素数量+当前元素数量+最后元素数量
+      }
