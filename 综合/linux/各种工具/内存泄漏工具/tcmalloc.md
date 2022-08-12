@@ -25,3 +25,4 @@ export PPROF_PATH=\*\*/gperftools-XX/src/pprof
     **/go/bin/pprof -http 0.0.0.0:50000  --base 内存快照base  ./可执行程序 内存快照对照组   
     
     
+https://gperftools.github.io/gperftools/heapprofile.html  
