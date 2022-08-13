@@ -20,11 +20,12 @@ export PPROF_PATH=\*\*/gperftools-XX/src/pprof
 
     c版本  
     **/gperftools-2.8/src/pprof  --text --add_lib=程序运行的动态依赖库  --lines --base 内存快照base  ./可执行程序 内存快照对照组
+    //动态链接库符号经常找不到，建议用go版本
     
     go版本，食用更佳  
     sudo apt install golang
     go get -u github.com/google/pprof
-    **/go/bin/pprof -http 0.0.0.0:50000  --base 内存快照base  ./可执行程序 内存快照对照组   
+    ~/go/bin/pprof -http 0.0.0.0:50000  --base 内存快照base  ./可执行程序 内存快照对照组   
     
     
 https://gperftools.github.io/gperftools/heapprofile.html  
