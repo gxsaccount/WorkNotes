@@ -1,5 +1,3 @@
-Pwngdb  
-git clone https://github.com/scwuaptx/Pwngdb.git
-cp ~/Pwngdb/.gdbinit ~/  
+PWNGDB+PWNDBG   https://www.freesion.com/article/7871636857/    
 
-https://www.freesion.com/article/7871636857/  
+https://blog.csdn.net/whbing1471/article/details/112410599 
