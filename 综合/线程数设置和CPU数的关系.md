@@ -18,3 +18,7 @@
 最佳线程数目 = （线程等待时间与线程CPU时间之比 + 1）* CPU数目
 
 刚刚说到的线程池大小的经验值，其实是这种公式的一种估算值。
+
+
+增加：  
+https://www.cnblogs.com/dennyzhangdd/p/6909771.html  
