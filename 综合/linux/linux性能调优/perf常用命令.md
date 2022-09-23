@@ -103,3 +103,8 @@ perf report -n --stdio //查看调用链比例
     
     ​ chrome打开perf.svg  
 
+
+
+# 获取更精细的栈
+
+https://gaomf.cn/2019/10/30/perf_stack_traceback/  
