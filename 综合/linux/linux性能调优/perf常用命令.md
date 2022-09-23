@@ -77,7 +77,7 @@ perf stat -e L1-dcache-load-misses ./a.out
 sudo perf  record -g -a -p pid ;   
 perf report  
 perf diff [oldfile] [newfile]  
-
+perf report -n --stdio //查看调用链比例
 
 # 运行时程序某一线程性能排查 #  
     1.获得程序进程号pid  
