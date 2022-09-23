@@ -87,3 +87,19 @@ perf report -n --stdio //查看调用链比例
     5.在log.txt中grep 断点的函数，获得线程号tid（linux的线程是轻量级线程，这里需要LWP的号码）
     6.sudo perf  record -g -a -p tid
     7.perf report 
+
+# 火焰图  
+
+    git clone https://github.com/brendangregg/FlameGraph.git
+    cd FlameGraph  
+    
+    perf script -i perf.data &> perf.unfold
+    # 生成折叠后的调用栈
+    ./stackcollapse-perf.pl perf.unfold &> perf.folded
+    # 生成火焰图
+    ./flamegraph.pl perf.folded > perf.svg
+    
+    perf script | ./stackcollapse-perf.pl | ./flamegraph.pl > perf.svg  
+    
+    ​ chrome打开perf.svg  
+
