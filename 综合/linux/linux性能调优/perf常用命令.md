@@ -85,7 +85,7 @@ perf report -n --stdio //查看调用链比例
     3.在要分析的代码处打断点
     4.thread apply all bt  
     5.在log.txt中grep 断点的函数，获得线程号tid（linux的线程是轻量级线程，这里需要LWP的号码）
-    6.sudo perf  record -g -a -p tid
+    6.sudo perf  record --call-graph dwarf -F 99 -a -p tid
     7.perf report 
 
 # 火焰图  
