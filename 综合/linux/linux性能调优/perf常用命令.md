@@ -101,7 +101,9 @@ perf report -n --stdio //查看调用链比例
     
     perf script | ./stackcollapse-perf.pl | ./flamegraph.pl > perf.svg  
     
-    ​ chrome打开perf.svg  
+    也可以直接perf script | ./stackcollapse-perf.pl | ./flamegraph.pl > perf.svg
+    
+    chrome打开perf.svg  
 
 
 
