@@ -174,3 +174,6 @@ top [-] [d] [p] [q] [c] [C] [S] [s]  [n]
     top 后按1可以看到cpu核的使用率统计信息。
     top后按2可以看到numa节点的统计信息。
     top后按3，然后选择一个numanode 可以将此numanode所有的cpu展开。
+
+
+top -H -p [pid]  查看进程内部线程占用
