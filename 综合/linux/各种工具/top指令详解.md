@@ -176,4 +176,4 @@ top [-] [d] [p] [q] [c] [C] [S] [s]  [n]
     top后按3，然后选择一个numanode 可以将此numanode所有的cpu展开。
 
 
-top -H -p [pid]  查看进程内部线程占用
+8.top -H -p [pid]  查看进程内部线程占用
