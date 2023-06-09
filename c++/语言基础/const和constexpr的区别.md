@@ -30,9 +30,10 @@ constexpr修饰的函数，简单的来说，如果其传入的参数可以在�
     }
 
 
-constexpr可以修饰的变量类型：LiteralType变量，可以再编译期确认
-http://en.cppreference.com/w/cpp/concept/LiteralType   
-https://learn.microsoft.com/zh-cn/cpp/cpp/trivial-standard-layout-and-pod-types?view=msvc-170#example  
+constexpr可以修饰的变量类型：  
+LiteralType变量，文本类型是可在编译时确定其布局的类型：  
+http://en.cppreference.com/w/cpp/concept/LiteralType     
+https://learn.microsoft.com/zh-cn/cpp/cpp/trivial-standard-layout-and-pod-types?view=msvc-170#example    
 
 * void  
 * 标量类型  
