@@ -60,3 +60,4 @@ https://learn.microsoft.com/zh-cn/cpp/cpp/trivial-standard-layout-and-pod-types?
         constexpr std::array<int, 2> array = {1, 2};
         constexpr Test2 t2{};
 
+谷歌规范中，要求全局变量必须使用constexpr，因为const的全局变量会有析构顺序的问题。  
