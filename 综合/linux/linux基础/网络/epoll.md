@@ -1,4 +1,7 @@
-http://news.16p.com/842984.html
+http://news.16p.com/842984.html 
+
+这篇介绍的很详细：（包括epoll和poll区别，内核拷贝，以及水平触发和边沿触发，用了嵌入式中高低电平解释）  
+https://blog.csdn.net/qq_39329062/article/details/124112170  
 # 铺垫 #    
 ## 等待队列 ##    
  * 队列头(wait_queue_head_t)往往是资源生产者,    
