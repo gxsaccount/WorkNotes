@@ -168,7 +168,7 @@ stride: (8*6, 2) = (48, 2)
 
 ---
 
-## 4. 第三层：`%s` = 把 trip count （循环迭代次数） 截到 s
+## 4. 第三层：`%s` = 把 trip count （循环迭代次数/也即mode的shape） 截到 s
 
 `/d` 之后，循环能跑 `size(A)/d` 次。但 B 的这个 mode 只要 **s 次**：
 
