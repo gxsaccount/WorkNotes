@@ -2,7 +2,7 @@
 
 > 更新：2026-09-11 —— 补充 cotarget 非整除、单射与 permutation 的边界条件。
 
-> 配套文档：`用循环理解Composition.md`
+> 配套文档：[`用循环理解Composition.md`](../03-Composition/用循环理解Composition.md)
 > 本文所有数值均经 NVIDIA CuTe DSL 实跑验证。
 > 官方原文出处：`media/docs/cpp/cute/02_layout_algebra.md` → **Complement** 一节
 > 文中【疑问】标记 = 学习过程中真实提出过的问题，答案集中在 §9。

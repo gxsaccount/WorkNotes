@@ -540,16 +540,16 @@ coalesce((3,4):(0,1)) = (3,4):(0,1) 不变
 
 | 文件 | 内容 |
 |---|---|
-| `sim.py` | 四个 composition 例子的逐步演示（`/d` → `%s` → coalesce → 验证） |
-| `sim2.py` | 失败案例 `A∘8:1` 的贪心过程 + 循环融合前后逐点对比 |
-| `sim3.py` | "隔 d 取 1" vs "隔 d 取 m" 的对照 |
-| `tests/test_note_invariants.py` | 非整除 cotarget、非单射与单 mode 外延的边界测试 |
+| `代码实验/sim.py` | 四个 composition 例子的逐步演示（`/d` → `%s` → coalesce → 验证） |
+| `代码实验/sim2.py` | 失败案例 `A∘8:1` 的贪心过程 + 循环融合前后逐点对比 |
+| `代码实验/sim3.py` | "隔 d 取 1" vs "隔 d 取 m" 的对照 |
+| `代码实验/tests/test_note_invariants.py` | 非整除 cotarget、非单射与单 mode 外延的边界测试 |
 
 ```bash
-python3 sim.py
-python3 sim2.py
-python3 sim3.py
-python3 -m unittest -v tests/test_note_invariants.py
+python3 03-Composition/代码实验/sim.py
+python3 03-Composition/代码实验/sim2.py
+python3 03-Composition/代码实验/sim3.py
+python3 -m unittest -v 03-Composition/代码实验/tests/test_note_invariants.py
 ```
 
-> `sim.py` 的多 mode 轻量模型只用于合法定义域内的手推例子；真正的 CuTe composition 仍应以 DSL / C++ 测试为准。
+> `代码实验/sim.py` 的多 mode 轻量模型只用于合法定义域内的手推例子；真正的 CuTe composition 仍应以 DSL / C++ 测试为准。

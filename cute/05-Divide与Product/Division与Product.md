@@ -1,7 +1,7 @@
 # CuTe Division 与 Product（Tiling 的两半）
 
 > 更新：2026-09-11 —— 补充 cotarget 非整除及单射 / permutation 的边界条件。
-> 配套文档：`用循环理解Composition.md`、`Complement补集概念.md`
+> 配套文档：[`用循环理解Composition.md`](../03-Composition/用循环理解Composition.md)、[`Complement补集概念.md`](../04-Complement/Complement补集概念.md)
 > 本文所有数值均经 NVIDIA CuTe DSL 实跑验证。
 > 官方原文出处：`media/docs/cpp/cute/02_layout_algebra.md` → **Logical Divide / Product** 两节
 
