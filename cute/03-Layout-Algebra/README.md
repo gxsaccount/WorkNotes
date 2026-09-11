@@ -1,6 +1,8 @@
 # 03 Layout Algebra
 
 > 官方对应：`media/docs/cpp/cute/02_layout_algebra.md`
+>
+> 更新：2026-09-11
 
 ## 官方顺序
 
@@ -13,6 +15,7 @@
 
 ## 当前完整笔记
 
+- [Coalesce 教程与练习](01-Coalesce/README.md)
 - [Composition](02-Composition/用循环理解Composition.md)
 - [Complement](04-Complement/Complement补集概念.md)
 - [Division 与 Product](Division与Product.md)
