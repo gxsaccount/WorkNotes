@@ -1,6 +1,7 @@
 # CuTe Division 与 Product（Tiling 的两半）
 
-> 配套文档：`用循环理解Composition.md`、`Complement补集概念.md`
+> 更新：2026-09-11 —— 补充 cotarget 非整除及单射 / permutation 的边界条件。
+> 配套文档：[`用循环理解Composition.md`](../03-Composition/用循环理解Composition.md)、[`Complement补集概念.md`](../04-Complement/Complement补集概念.md)
 > 本文所有数值均经 NVIDIA CuTe DSL 实跑验证。
 > 官方原文出处：`media/docs/cpp/cute/02_layout_algebra.md` → **Logical Divide / Product** 两节
 
@@ -113,8 +114,10 @@ tile 5: [18, 22, 19, 23]
 
 **横向 = tile 内，纵向 = 跳到下一个 tile。**
 
-> **本质是重排**：R 与 A 覆盖同一批元素（实测集合相同，都是 `0..23`），只是换了遍历顺序。
+> **本例的本质是重排**：R 与 A 覆盖同一批元素（实测集合相同，都是 `0..23`），只是换了遍历顺序。
 > 官方：*"can be viewed as a kind of `gather` operation or as simply a **permutation**."*
+
+这依赖本例的两个条件：`A` 单射，且 `24` 恰好由 tile 的完整周期整除；它不是所有 divide 的无条件性质。
 
 ---
 
@@ -127,13 +130,39 @@ tile 5: [18, 22, 19, 23]
 | **`composition(A,B)`** | `size(B) = 4` | **4 / 24** | `[0,4,1,5]` ← **只是 tile 0** |
 | **`divide(A,B)`** | `size((B,B*)) = 4×6 = 24` | **24 / 24** | 全部 ✓ |
 
-**元素没丢，是 composition 这个函数"够不着"另外 20 个。**
+**在这个整齐分块例子中**，元素没丢，是 composition 这个函数"够不着"另外 20 个。
 
 ```
 B  像集大小 = 4   （tile 内部位置）
 B* 像集大小 = 6   （6 个 tile 起点）
 (B,B*)      = 4×6 = 24 = size(A)   ← 全覆盖
 ```
+
+⚠️ 一般 `complement` 会用完整块向上覆盖 cotarget，不能无条件推出 `size((B,B*)) == size(A)`。
+例如 `A=10:1, B=4:1` 时，`B*=3:4`，因而 divide 的定义域大小为 `4×3=12`，覆盖到 offset 11。
+
+### 什么时候 divide 才是 permutation？
+
+不要只看 `(B,B*)`。它是 tiler 的不重叠下标表；最终结果还要经过 `A`：
+
+```text
+divide(A,B) = A ∘ (B,B*)
+```
+
+因此需要同时满足：
+
+1. `B` 可补（tiler 本身不发生坐标别名）；
+2. cotarget 恰好由完整 tile 周期整除；
+3. **A 单射**。
+
+广播只是 A 非单射的一种情形，并非唯一原因：
+
+```text
+A = 10:0                    -> 广播，所有坐标都映射到 0
+A = (2,2):(1,1)             -> 没有 stride=0，但 (1,0) 与 (0,1) 都映射到 1
+```
+
+若 A 不单射，divide 更准确应称为 gather / reindex，而不是 permutation。
 
 ### 🔑 `A ∘ B` 一定只是 tile 0
 
@@ -460,6 +489,9 @@ divide  = ((2,2),(2,3)):((4,1),(2,8))    ← 两者拼接
 | **Composition** | `A ∘ B`，`R(c) = A(B(c))` | — |
 | **Divide** | `A ∘ (B, B*)` | `size(A)` |
 | **Product** | `(A, A*∘B)` | `size(A) × cosize(B)` |
+
+> 注意：此列是 **构造 `A*` 的 cotarget**，不是 product result 的 `size`。
+> `logical_product(A,B)` 的逻辑元素数是 `size(A) × size(B)`；例如 `A=4:1, B=6:2` 时，result size 是 `24`，而 cotarget / result cosize 是 `44`。
 
 ### Divide vs Product 对照
 
