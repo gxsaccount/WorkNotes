@@ -22,6 +22,12 @@ class L:
             c.append(n % s); n //= s
         return c
     def __call__(self, n):                 # 内积
+        # CuTe's integral-layout composition rule is unbounded for a scalar
+        # coordinate: a:b evaluated at n is b*n, not b*(n % a).
+        # Multimodal examples below are evaluated only within their valid
+        # logical domain; composition's divisibility checks guard that case.
+        if len(self.shape) == 1:
+            return n * self.stride[0]
         return sum(ci*di for ci, di in zip(self.crd(n), self.stride))
     def seq(self): return [self(n) for n in range(self.size())]
     def __str__(self):

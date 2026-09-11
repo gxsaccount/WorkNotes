@@ -1,7 +1,6 @@
 # -*- coding: utf-8 -*-
-"""验证 compatible(B, R)：B 的每一个坐标，R 都能接受"""
+"""验证 composition 的后置条件 compatible(B, R)。"""
 from sim import L
-from math import prod
 
 def domain(layout):
     """产生一个 layout 的全部坐标（自然序）"""
@@ -23,6 +22,22 @@ def capacity(shape):
             for x in s: rec(x)
     rec(shape)
     return flat
+
+def shape_size(shape):
+    if isinstance(shape, int):
+        return shape
+    out = 1
+    for x in shape:
+        out *= shape_size(x)
+    return out
+
+def compatible(lhs, rhs):
+    """对应 CuTe compatible 的形状规则：lhs 的每个 terminal 容量等于 rhs 对应子树的 size。"""
+    if isinstance(lhs, int):
+        return lhs == shape_size(rhs)
+    if isinstance(rhs, int) or len(lhs) != len(rhs):
+        return False
+    return all(compatible(x, y) for x, y in zip(lhs, rhs))
 
 B = L([4,3],[3,1])          # B: shape (4,3)
 R = L([2,2,3],[24,2,8])     # R 拍平: shape (2,2,3)  对应 ((2,2),3)
@@ -54,9 +69,11 @@ bad2 = sum(1 for i in range(B.size()) if i >= Rbad.size())
 print(f"   Rbad.size() = {Rbad.size()}, B.size() = {B.size()}, 越界数 = {bad2}")
 print("   → B 有 12 个坐标，R 只装得下 8 个 → 不兼容 ✗")
 
-print("\n前置条件 vs 后置条件：")
-print("   前置 compatible(A, B)：A 的定义域要装下 B 的值域（B 输出的最大索引）")
+print("\n不要把数值范围检查误叫成 compatible(A, B)：")
+print("   compatible(A, B) 不是 composition 的前置条件；官方 composition 的后置条件是 compatible(B, R)。")
+print(f"   compatible(A.shape, B.shape) = compatible((6,2), (4,3)) = {compatible((6,2), (4,3))}")
 mx = max(B(i) for i in range(B.size()))
-print(f"      B 输出的最大值 = {mx},  A.size() = {A.size()}  -> {'✓' if mx < A.size() else '✗'}")
-print("   后置 compatible(B, R)：R 的定义域要装下 B 的定义域（坐标空间）")
-print(f"      B.size() = {B.size()},  R.size() = {R.size()}  -> {'✓' if B.size()==R.size() else '✗'}")
+print(f"   本例 B 输出的最大标量索引 = {mx}, A.size() = {A.size()} -> {'✓' if mx < A.size() else '✗'}")
+print("   这只是本例的数值范围 sanity check，不是 compatible 的定义。")
+print("   composition 后置 compatible(B, R)：")
+print(f"      compatible(B.shape, R.shape) = compatible((4,3), ((2,2),3)) = {compatible((4,3), ((2,2),3))}")

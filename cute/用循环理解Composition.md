@@ -3,6 +3,7 @@
 > 核心思想一句话：
 > **把 Layout A 看成一个数组（按自然序展开），composition 就是对这个数组做「隔 d 取 1，再只取前 s 个」。**
 >
+> 更新：2026-09-11 —— 修正配套 Python 模型的单 mode 标量坐标语义，并补充其适用边界。
 > 文中所有数值结果均经 NVIDIA CuTe DSL 实跑验证（部分为该 DSL 报错信息）。
 > 官方术语已对照 `media/docs/cpp/cute/02_layout_algebra.md` 校订。
 
@@ -46,6 +47,8 @@ class L:                          # Layout：shape/stride 都是扁平 list
             c.append(n % s); n //= s
         return c
     def __call__(self, n):        # 内积：坐标 × stride
+        if len(self.shape) == 1:  # integral layout 的标量坐标不按 shape 回绕
+            return n * self.stride[0]
         return sum(ci*di for ci, di in zip(self.crd(n), self.stride))
     def seq(self): return [self(n) for n in range(self.size())]
 ```
@@ -540,9 +543,13 @@ coalesce((3,4):(0,1)) = (3,4):(0,1) 不变
 | `sim.py` | 四个 composition 例子的逐步演示（`/d` → `%s` → coalesce → 验证） |
 | `sim2.py` | 失败案例 `A∘8:1` 的贪心过程 + 循环融合前后逐点对比 |
 | `sim3.py` | "隔 d 取 1" vs "隔 d 取 m" 的对照 |
+| `tests/test_note_invariants.py` | 非整除 cotarget、非单射与单 mode 外延的边界测试 |
 
 ```bash
 python3 sim.py
 python3 sim2.py
 python3 sim3.py
+python3 -m unittest -v tests/test_note_invariants.py
 ```
+
+> `sim.py` 的多 mode 轻量模型只用于合法定义域内的手推例子；真正的 CuTe composition 仍应以 DSL / C++ 测试为准。
