@@ -1,115 +1,133 @@
 # CuTe 从入门到深入学习计划
 
 > 更新：2026-09-11  
-> 适用对象：具有基本 C++ 或 Python 编程能力，希望系统学习 NVIDIA CUTLASS CuTe 的开发者。  
-> 推荐周期：10～12 周，每周投入约 10 小时。
+> 目录依据：NVIDIA CUTLASS `main` 分支中的 CuTe C++ 与 CuTe DSL 官方文档
+> 推荐周期：16 周左右，每周约 10.5 小时
 
-## 1. 每天学习多久
+## 1. 学习强度
 
-### 推荐方案
+### 推荐安排
 
-- 工作日：每天 **1.5 小时**
-- 周末：选择一天学习 **3 小时**
+- 工作日：每天 1.5 小时
+- 周末：选择一天学习 3 小时
 - 每周学习 6 天，休息 1 天
-- 每周总投入约 **10.5 小时**
+- 每周总投入约 10.5 小时
 
-按这个强度，完成第一轮学习大约需要 **10～12 周**。
-
-### 每天 1.5 小时如何安排
+### 每天 1.5 小时
 
 | 时间 | 内容 |
 |---|---|
-| 15 分钟 | 回顾前一天的概念和错题 |
-| 30 分钟 | 阅读文档、理解新概念 |
-| 35 分钟 | 手算 Layout 或编写小实验 |
-| 10 分钟 | 运行验证、整理笔记 |
+| 15 分钟 | 复习前一天的概念与错题 |
+| 30 分钟 | 阅读官方文档和本地笔记 |
+| 35 分钟 | 手算 Layout 或编写实验 |
+| 10 分钟 | 运行测试并整理结论 |
 
-学习 CuTe 时，动手计算和实验的时间应不少于总时间的一半。
-
-### 其他强度
-
-| 模式 | 时间投入 | 预计周期 |
-|---|---:|---:|
-| 轻量 | 每天 1 小时，每周 6 天 | 16～20 周 |
-| 推荐 | 工作日 1.5 小时，周末 3 小时 | 10～12 周 |
-| 强化 | 每天 3～4 小时 | 6～8 周 |
-
-不建议长期每天学习超过 4 小时。CuTe 的抽象较密集，持续手算、编码和复盘通常比连续阅读更有效。
+CuTe 学习中，手算、代码实验和结果验证应占一半以上时间。
 
 ---
 
-## 2. 第一阶段：CUDA 与矩阵计算基础
+## 2. 两条学习主线
 
-**时间：第 1～2 周**
+### 概念主线
+
+按照官方 CuTe C++ 文档顺序：
+
+```text
+Quickstart
+  → Layout
+  → Layout Algebra
+  → Tensor
+  → Tensor Algorithms
+  → MMA Atom
+  → GEMM
+  → Predication
+  → TMA Tensor
+```
+
+### CuTe DSL 实践主线
+
+本仓库现有实验使用 `cutlass.cute`，因此需要并行学习：
+
+```text
+@cute.jit
+  → Code Generation
+  → Control Flow
+  → JIT Arguments
+  → JIT Cache / Options
+  → WMMA / WGMMA / TCGen05
+  → Debug / Profile / Autotune / Integration
+```
+
+详细对应关系见：[官方目录映射](官方目录映射.md)。
+
+---
+
+## 3. 第 1～2 周：前置知识
+
+目录：[00-前置知识](00-前置知识/README.md)
 
 ### 学习内容
 
-- CUDA 的 thread、warp、block、grid
+- CUDA thread、warp、block、grid
 - global、shared、register memory
-- 合并访存和 shared memory bank conflict
+- 合并访存和 bank conflict
 - row-major 与 column-major
-- GEMM 的 `M/N/K`
-- CTA tile、warp tile、thread tile
+- GEMM 的 M、N、K
+- CTA、warp、thread tiling
 - shape、stride、coordinate、offset
 
-### 练习
+### 完成标准
 
-手算以下 Layout：
-
-```text
-shape  = (4, 3)
-stride = (1, 4)
-
-(i, j) -> i + 4*j
-```
-
-尝试回答：
-
-1. 哪个 mode 变化最快？
-2. 自然序下的 offset 序列是什么？
-3. 如果 stride 改为 `(3,1)`，访问顺序如何变化？
-
-### 达标标准
-
-- 能解释线程、warp 和 block 的关系
-- 能解释矩阵分块为什么有利于数据复用
-- 能根据 shape 和 stride 手算任意坐标的 offset
+能够从 CUDA 线程和存储层级解释矩阵分块的目的，并手算二维矩阵地址。
 
 ---
 
-## 3. 第二阶段：CuTe Layout 基础
+## 4. 第 3 周：Quickstart 与 CuTe DSL 入门
 
-**时间：第 3 周**
+目录：
 
-### 核心模型
-
-```text
-Layout = Shape : Stride
-coordinate -> offset
-```
+- [01-Quickstart](01-Quickstart/README.md)
+- [10-CuTe-DSL](10-CuTe-DSL/README.md)
 
 ### 学习内容
 
-- Shape、Stride、Layout
+- 环境、示例和库结构
+- 打印 CuTe 对象
+- `@cute.jit`
+- Host 与 Device 代码边界
+- Code Generation
+- 静态与动态控制流
+
+### 完成标准
+
+能够运行和修改最小 CuTe DSL 程序，并打印 Shape、Stride 和 Layout。
+
+---
+
+## 5. 第 4～5 周：Layout
+
+目录：[02-Layout](02-Layout/README.md)
+
+### 官方子主题
+
+1. [基础类型与概念](02-Layout/01-基础类型与概念/README.md)
+2. [创建与使用](02-Layout/02-创建与使用/README.md)
+3. [坐标与兼容性](02-Layout/03-坐标与兼容性/README.md)
+4. [Layout 操作](02-Layout/04-Layout操作/README.md)
+
+### 学习内容
+
+- Integer、Tuple、IntTuple
+- Shape、Stride、Layout、Tensor
 - mode、rank、depth
-- 层级 tuple
-- `size` 与 `cosize`
+- `size`、`cosize`、`compatible`
 - `idx2crd` 与 `crd2idx`
-- CuTe column-major 自然序
-- 静态值与动态值
-- injective、surjective、bijective
-- broadcasting 与地址 alias
-- `flatten` 与 `coalesce`
+- sublayout、concatenation、grouping、flattening、slicing
+- 单射、广播、空洞和地址别名
 
-### 仓库学习材料
+### 必做练习
 
-1. `03-Composition/用循环理解Composition.md` 的第 0 节
-2. `03-Composition/代码实验/sim.py` 中的 `L`
-3. `03-Composition/代码实验/quiz.py` 的 Coalesce 部分
-
-### 练习
-
-对下面的 Layout 展开完整 offset 序列：
+展开并分析：
 
 ```text
 (4,3):(1,4)
@@ -118,407 +136,252 @@ coordinate -> offset
 (2,2,2):(2,1,4)
 ```
 
-分别判断它们是否：
+### 完成标准
 
-- 单射
-- 紧凑
-- 存在空洞
-- 存在地址重叠
-- 可以 coalesce
-
-### 达标标准
-
-看到一个 Layout 后，能够把它同时理解为：
-
-- 坐标到 offset 的函数
-- 多层嵌套循环
-- 混合进制计数器
-- GPU 地址生成器
+能够把 Layout 解释为坐标映射、嵌套循环、混合进制计数器和地址生成器。
 
 ---
 
-## 4. 第三阶段：Composition
+## 6. 第 6～8 周：Layout Algebra
 
-**时间：第 4～5 周**
+目录：[03-Layout-Algebra](03-Layout-Algebra/README.md)
 
-### 核心公式
+### 6.1 Coalesce
+
+目录：[01-Coalesce](03-Layout-Algebra/01-Coalesce/README.md)
+
+掌握退化 mode、相邻 mode 合并条件和 by-mode coalesce。
+
+### 6.2 Composition
+
+目录：[02-Composition](03-Layout-Algebra/02-Composition/README.md)
+
+掌握：
 
 ```text
 R = A ∘ B
 R(c) = A(B(c))
 ```
 
-### 学习内容
+学习 `/d`、`%s`、divisibility condition、integral/multimodal 分支和循环融合。
 
-- A 和 B 在 composition 中分别负责什么
-- B 提供循环骨架，A 提供最终 offset
-- concatenation 与 composition 的区别
-- composition 左分配律
-- integral layout 的闭式解
-- multimodal layout 的 `/d` 与 `%s`
-- stride divisibility condition
-- shape divisibility condition
-- 为什么 composition 可以消除运行时除法和取模
+### 6.3 Composition Tilers
 
-### 仓库学习顺序
+目录：[03-Composition-Tilers](03-Layout-Algebra/03-Composition-Tilers/README.md)
 
-1. `03-Composition/用循环理解Composition.md`
-2. `03-Composition/代码实验/sim.py`
-3. `03-Composition/代码实验/sim3.py`
-4. `03-Composition/代码实验/sim2.py`
-5. `03-Composition/代码实验/quiz.py`
-6. `03-Composition/代码实验/p7.py`
-7. `03-Composition/代码实验/p8.py`
+区分普通 concatenation、tuple tiler 和 by-mode tiler。
 
-### 必做练习
+### 6.4 Complement
 
-给定：
+目录：[04-Complement](03-Layout-Algebra/04-Complement/README.md)
 
-```text
-A = (6,2):(8,2)
+理解 complement 是 tile 副本的基址 Layout，而不是遗漏元素列表。
+
+### 6.5 Division
+
+目录：[05-Division](03-Layout-Algebra/05-Division/README.md)
+
+掌握 logical、zipped、tiled、flat divide，以及 permutation/gather 的边界。
+
+### 6.6 Product
+
+目录：[06-Product](03-Layout-Algebra/06-Product/README.md)
+
+掌握 logical、blocked、raked、zipped 和 tiled product。
+
+### 本章测试
+
+```bash
+python3 -m unittest -v 03-Layout-Algebra/02-Composition/代码实验/tests/test_note_invariants.py
 ```
 
-计算并实跑验证：
+### 完成标准
 
-```text
-A ∘ 4:3
-A ∘ 3:1
-A ∘ 2:6
-A ∘ (4,3):(3,1)
-```
-
-同时找出至少两个不满足 divisibility condition 的例子，并说明失败原因。
-
-### 达标标准
-
-- 能通过函数复合直接验证结果
-- 能手算 `/d`、`%s` 和 coalesce
-- 能说明结果 Layout 为什么与原始复合函数等价
-- 能区分 compatible 与普通的数值范围检查
+能够逐点验证代数变换前后的 Layout 映射，并解释每个结果 mode 的物理意义。
 
 ---
 
-## 5. 第四阶段：Complement
+## 7. 第 9 周：Tensor
 
-**时间：第 6 周**
-
-### 核心概念
-
-```text
-B* = complement(B, M)
-```
-
-Complement 不是“B 没选中的元素列表”，而是描述多个 B 副本如何无重叠摆放的基址 Layout。
+目录：[04-Tensor](04-Tensor/README.md)
 
 ### 学习内容
 
-- cotarget
-- ordered complement
-- disjoint codomain
-- 完整副本与向上覆盖
-- cotarget 不能整除时的边界行为
-- `(B, B*)` 的拼接含义
-- complement 与 tile 基址的关系
-
-### 仓库学习材料
-
-- `04-Complement/Complement补集概念.md`
-- `03-Composition/代码实验/tests/test_note_invariants.py`
-
-### 必做练习
-
-计算或验证：
-
-```text
-complement(4:1, 24)
-complement(4:2, 24)
-complement(4:1, 10)
-```
-
-对每个结果展开：
-
-```text
-(B, B*)(i,j) = B(i) + B*(j)
-```
-
-检查：
-
-- 是否发生重叠
-- 覆盖到哪个 offset
-- 定义域大小是否等于 cotarget
-
-### 达标标准
-
-- 不再把 complement 误解为补集元素列表
-- 能解释为什么 cotarget 为 10 时可能覆盖到 11
-- 能解释 `B*` 为什么表示 tile 间的移动方式
-
----
-
-## 6. 第五阶段：Divide 与 Product
-
-**时间：第 7 周**
-
-### 核心公式
-
-```text
-Divide:  A ∘ (B, B*)
-Product: (A, A* ∘ B)
-```
-
-### 学习内容
-
-- tile 内与 tile 间的区别
-- `logical_divide`
-- `zipped_divide`
-- `tiled_divide`
-- `flat_divide`
-- by-mode tiler
-- divide 什么时候是 permutation
-- divide 什么时候只是 gather 或 reindex
-- A 非单射时产生的重复访问
-
-### 仓库学习材料
-
-- `05-Divide与Product/Division与Product.md`
-
-### 必做练习
-
-给定：
-
-```text
-A = (4,2,3):(2,1,8)
-B = 4:2
-```
-
-完成：
-
-1. 计算 `B*`
-2. 展开 `(B,B*)`
-3. 计算 `A ∘ (B,B*)`
-4. 列出每个 tile 的元素
-5. 判断结果是否为 permutation
-
-然后把 A 改成：
-
-```text
-10:0
-(2,2):(1,1)
-```
-
-观察 divide 为什么不再是 permutation。
-
-### 达标标准
-
-- 能从公式推导 divide
-- 能从结果中识别 tile mode 和 rest mode
-- 能正确选择 logical、zipped、tiled 或 flat 形式
-
----
-
-## 7. 第六阶段：Tensor 与线程切片
-
-**时间：第 8 周**
-
-### 核心模型
-
-```text
-Tensor = Engine + Layout
-```
-
-### 学习内容
-
+- Tensor Engine
+- owning 与 nonowning Tensor
 - global、shared、register Tensor
-- `make_tensor`
-- Tensor slicing
-- `_` 占位符
-- `local_tile`
-- `local_partition`
-- `partition_S` 与 `partition_D`
-- identity tensor
-- coordinate tensor
-- block、warp、thread 的数据所有权
+- Tiling 与 Slicing
+- inner/outer partitioning
+- thread-value partitioning
+- `local_tile`、`local_partition`
+- `partition_S`、`partition_D`
 
-### 练习项目
+### 完成标准
 
-对一个 `128×128` 矩阵：
-
-1. 切成 `32×32` CTA tile
-2. 将 CTA tile 分配给 warp
-3. 将 warp tile 分配给线程
-4. 打印每个线程负责的逻辑坐标
-5. 检查是否遗漏或重复
-
-### 达标标准
-
-能够回答：
-
-> 给定一个线程编号，这个线程负责矩阵中的哪些元素？
+给定线程编号，能够说明该线程负责哪些逻辑坐标和物理数据。
 
 ---
 
-## 8. 第七阶段：Copy 与数据搬运
+## 8. 第 10 周：Tensor Algorithms
 
-**时间：第 9 周**
+目录：[05-Tensor-Algorithms](05-Tensor-Algorithms/README.md)
 
 ### 学习内容
 
-- Copy Atom
-- TiledCopy
-- thread layout
-- value layout
-- global → shared
-- shared → register
-- vectorized copy
-- predication
-- shared-memory swizzle
-- 异步数据搬运
+- `copy`
+- `copy_if`
+- `gemm` 算法接口
+- `axpby`、`fill`、`clear`
+- Copy 参数类型与并行/同步语义
 
-### 练习项目
+### 项目
 
-依次实现：
-
-1. 向量复制
-2. 矩阵转置
-3. tiled global-to-shared copy
-4. shared-to-register copy
-5. 非整除尺寸下的 predicated copy
-
-### 达标标准
-
-- 能说明每个线程搬运哪些元素
-- 能判断访问是否合并
-- 能检查 shared memory bank conflict
-- 能处理矩阵边界
+实现并验证 global → shared → register 的 tiled copy。
 
 ---
 
-## 9. 第八阶段：MMA 与 GEMM
+## 9. 第 11 周：MMA Atom
 
-**时间：第 10～11 周**
+目录：[06-MMA-Atom](06-MMA-Atom/README.md)
 
 ### 学习内容
 
-- MMA Atom
+- MMA Operation Struct
+- MMA Traits
+- `fma`
+- Atom 的 Shape 与数据类型
+- Thread/Value Layout
+- Accumulator Mapping
+- A/B Operand Mapping
 - TiledMMA
-- thread/value ownership
-- `partition_A`
-- `partition_B`
-- `partition_C`
-- accumulator fragment
-- SIMT GEMM
-- Tensor Core GEMM
-- GEMM mainloop
-- K-loop
-- double buffering
-- epilogue
+
+### 完成标准
+
+能够解释一次 MMA 中每个线程持有哪些 A、B 和 C fragment。
+
+---
+
+## 10. 第 12～13 周：完整 GEMM
+
+目录：[07-GEMM-Tutorial](07-GEMM-Tutorial/README.md)
+
+### 学习顺序
+
+1. Full Tensor 与 M/N/K 主序
+2. CTA Partitioning
+3. Shared Memory Tensor
+4. Copy Partitioning
+5. Math Partitioning
+6. K-loop 和 Mainloop
+7. SIMT GEMM
+8. Tensor Core GEMM
 
 ### 项目顺序
 
-1. CPU reference GEMM
-2. naive CUDA GEMM
-3. shared-memory tiled GEMM
-4. CuTe SIMT GEMM
-5. CuTe Tensor Core GEMM
-6. 支持非整除尺寸的 GEMM
+```text
+CPU Reference
+  → Naive CUDA GEMM
+  → Shared-memory GEMM
+  → CuTe SIMT GEMM
+  → CuTe Tensor Core GEMM
+```
 
-每个实现都与 CPU reference 比较结果，并添加正确性测试。
-
-### 达标标准
-
-- 能解释 A、B、C Tensor 如何被线程划分
-- 能解释一次 MMA 指令中每个线程持有哪些值
-- 能阅读简单的 CuTe GEMM kernel
-- 能使用正确性测试验证 kernel
+每个版本都必须增加正确性测试，并与 CPU reference 比较。
 
 ---
 
-## 10. 第九阶段：性能分析与高级架构
+## 11. 第 14 周：Predication
 
-**时间：第 12 周及以后**
+目录：[08-Predication](08-Predication/README.md)
 
 ### 学习内容
 
-- Nsight Compute
-- memory throughput
-- Tensor Core utilization
-- occupancy
-- register pressure
-- roofline 分析
-- multistage pipeline
-- warp specialization
-- Hopper TMA
-- `mbarrier`
-- warpgroup MMA
-- cluster
-- persistent kernel
-- Split-K 与 Stream-K
-- epilogue fusion
-- Hopper SM90 与 Blackwell SM100
+- 非整除问题尺寸
+- Identity Coordinate Tensor
+- 边界谓词
+- Predicated Copy
+- GEMM 边界处理
 
-### 达标标准
+### 完成标准
 
-面对一个性能不理想的 kernel，能够判断瓶颈主要来自：
-
-- 计算
-- global memory
-- shared memory
-- 同步
-- occupancy
-- register pressure
-- tile 选择
+GEMM 能正确处理 M、N、K 不是 tile 整数倍的情况。
 
 ---
 
-## 11. 每周学习节奏
+## 12. 第 15 周：TMA Tensor
 
-建议固定使用下面的节奏：
+目录：[09-TMA-Tensors](09-TMA-Tensors/README.md)
 
-| 日期 | 学习内容 |
+### 学习内容
+
+- TMA 指令模型
+- Implicit CuTe Tensor
+- ArithTuple 与 Iterator
+- Basis stride
+- 坐标和地址变换
+- TMA Tensor 构造
+
+---
+
+## 13. 第 16 周及以后：架构专项与工程化
+
+目录：
+
+- [11-Architecture-MMA](11-Architecture-MMA/README.md)
+- [12-Engineering-Guides](12-Engineering-Guides/README.md)
+
+### 架构专项
+
+- WMMA
+- Hopper WGMMA
+- Blackwell TCGen05
+- Pipeline、mbarrier、warp specialization
+
+### 工程化
+
+- Debugging
+- IKET 与 Nsight Compute Profiling
+- GEMM Autotuning
+- AOT Compilation
+- TVM FFI
+- Framework Integration
+
+### 完成标准
+
+能够根据性能测量判断瓶颈，提出 tile、copy、MMA、pipeline 或调度优化方案，并用基准测试验证。
+
+---
+
+## 14. 每周固定节奏
+
+| 日期 | 内容 |
 |---|---|
-| 周一 | 阅读新概念，建立整体模型 |
-| 周二 | 手算简单例子 |
+| 周一 | 阅读官方章节，建立术语和整体模型 |
+| 周二 | 手算基础例子 |
 | 周三 | 手算复杂和边界例子 |
-| 周四 | 编写 Python 或 CuTe DSL 实验 |
-| 周五 | 整理结论，记录错误案例 |
-| 周六 | 3 小时综合项目和测试 |
-| 周日 | 休息，或者只做轻量复习 |
+| 周四 | 编写 Python/CuTe DSL 实验 |
+| 周五 | 整理错误案例和本章笔记 |
+| 周六 | 综合项目、测试和性能测量 |
+| 周日 | 休息或轻量复习 |
 
----
+## 15. 学习方法
 
-## 12. 学习方法
-
-每学习一个 CuTe 概念，都完成下面四步：
+对每个概念执行：
 
 ```text
-手算 → Python 模拟 → CuTe DSL 验证 → 放入真实 kernel
+官方定义
+  → 手算
+  → Python 模拟
+  → CuTe DSL 实跑
+  → 单元测试
+  → 放入真实 Kernel
 ```
 
-每遇到一个 Layout，都回答：
+对每个 Layout 都回答：
 
-1. 它的定义域是什么？
-2. shape 每个 mode 表示什么？
-3. stride 每个 mode 表示什么？
-4. 自然序下的 offset 序列是什么？
-5. 是否单射？
-6. 是否紧凑？
-7. 是否可以 coalesce？
-8. 每个线程最终负责什么数据？
-
-不要只记 API。CuTe 的关键是理解 Layout 所描述的映射和数据所有权。
-
----
-
-## 13. 第一轮学习完成标准
-
-完成第一轮后，应能够：
-
-- 熟练手算常见 Layout
-- 理解 composition、complement、divide 和 product
-- 使用 Layout 描述 tile 和线程映射
-- 理解 Tensor、Copy 和 MMA 的基本关系
-- 阅读简单的 CuTe GEMM kernel
-- 编写并验证一个基础 CuTe tiled kernel
-- 使用性能工具定位明显的访存和计算问题
-
-第一轮不要求记住所有模板和 API。真正的完成标准是：看到 CuTe 代码时，能够逐层还原它描述的坐标映射、线程分工和数据移动过程。
+1. 定义域和 codomain 是什么？
+2. 每个 mode 表示什么？
+3. 自然序 offset 是什么？
+4. 是否单射、紧凑或存在空洞？
+5. 是否可以 coalesce？
+6. 与哪个线程、value、memory space 对应？
