@@ -15,6 +15,59 @@ coordinate -> index
 
 后续的 Tensor、线程分工、Copy、MMA 和 GEMM，都会反复使用这个映射。
 
+## 逻辑 index 与 offset
+
+### 逻辑 index
+
+逻辑 index 表示元素在 Layout 定义域中的自然序号：
+
+```text
+0, 1, 2, ..., size(Layout)-1
+```
+
+它只说明“这是第几个逻辑元素”，通常是将多维坐标按自然序拍平后的编号。
+
+### offset
+
+offset 是 Layout 输出的整数：
+
+```text
+offset = Layout(logical_index)
+```
+
+它表示相对于基址的位移，由 stride 决定。当 Layout 与 Tensor 的数据指针结合后：
+
+```text
+元素地址 = base_address + offset × sizeof(element)
+```
+
+因此可以把 offset 通俗地理解为“物理内存中的相对 index”，但它不是独立存在的绝对物理地址。
+
+例如：
+
+```text
+L = (4,2):(2,1)
+```
+
+| 逻辑 index | 坐标 | offset |
+|---:|---|---:|
+| 0 | `(0,0)` | 0 |
+| 1 | `(1,0)` | 2 |
+| 2 | `(2,0)` | 4 |
+| 3 | `(3,0)` | 6 |
+| 4 | `(0,1)` | 1 |
+
+所以逻辑 index `1` 表示“第 2 个逻辑元素”，但它位于相对基址 offset `2`。
+
+还要注意：在纯 Layout Algebra 中，Layout 的输出只是一个整数。这个整数既可以作为最终
+Tensor 的 offset，也可以继续作为另一个 Layout 的逻辑 index：
+
+```text
+c --B--> 逻辑 index n --A--> 最终 offset
+
+(A ∘ B)(c) = A(B(c))
+```
+
 ## 推荐学习顺序
 
 1. [基础类型与概念](01-基础类型与概念/README.md)
@@ -72,6 +125,23 @@ CuTe 使用 colexicographical order：自然遍历时 mode-0 最先变化，再�
 ### 4. 地址生成器
 
 当 Layout 与指针或数组组成 Tensor 后，Layout 产生的 index 被用于访问实际数据。
+
+### 5. Tile 排布与复制规则
+
+Layout 也可以描述一个 tile 内部的元素位置，以及多个 tile 副本的基址排布：
+
+```text
+tile 内部 Layout：4:1      -> 0,1,2,3
+tile 副本 Layout：3:4      -> 0,4,8
+
+组合后的排布：
+(4,3):(1,4)
+L(i,j) = i + 4*j
+```
+
+其中 `i` 选择 tile 内元素，`j` 选择第几个 tile 副本。
+
+但 Layout 只描述 index 规则，本身不会执行数据复制；实际搬运由 Tensor/Copy 等算法完成。Complement 和 Product 会在 Layout Algebra 章节中正式构造这类 tile 副本规则。
 
 ## 本章边界
 

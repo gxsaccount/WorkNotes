@@ -13,7 +13,7 @@ EXPERIMENT_DIR = Path(__file__).resolve().parents[1]
 if str(EXPERIMENT_DIR) not in sys.path:
     sys.path.insert(0, str(EXPERIMENT_DIR))
 
-from sim import L
+from sim import L, slash_d
 
 
 def concat_1d(left_shape, left_stride, right_shape, right_stride):
@@ -25,6 +25,19 @@ def concat_1d(left_shape, left_stride, right_shape, right_stride):
 
 
 class NoteInvariantTest(unittest.TestCase):
+    def test_layout_chapter_logical_index_to_offset_example(self):
+        layout = L([4, 2], [2, 1])
+        self.assertEqual([layout(i) for i in range(5)], [0, 2, 4, 6, 1])
+
+    def test_layout_chapter_tile_replication_example(self):
+        self.assertEqual(concat_1d(4, 1, 3, 4), list(range(12)))
+
+    def test_slash_d_updates_shape_and_stride_with_residues(self):
+        layout = L([3, 6, 2, 8], [1, 10, 100, 1000])
+        shape, stride = slash_d(layout, 9)
+        self.assertEqual(shape, [1, 2, 2, 8])
+        self.assertEqual(stride, [9, 30, 100, 1000])
+
     def test_single_mode_layout_extends_for_scalar_coordinates(self):
         # Matches the integral composition identity:
         # (2:2) o (100:1) == 100:2, so result(99) == 198.

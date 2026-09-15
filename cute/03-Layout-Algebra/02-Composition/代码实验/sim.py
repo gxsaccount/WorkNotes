@@ -56,7 +56,9 @@ def slash_d(lay, d):
         f = min(rem, s_i)                 # 这个 mode 能吸收多少
         if s_i % f != 0: raise ValueError(f"/d 失败：{s_i} 不能被 {f} 整除")
         sh.append(s_i // f)
-        st.append(d_i * f)
+        # stride 乘的是进入当前 mode 时仍未消掉的采样距离，
+        # 而不是当前 mode 局部吸收的因子 f。
+        st.append(d_i * rem)
         rem //= f
         if rem == 1:                      # 后面的 mode 原样
             sh += lay.shape[len(sh):]
@@ -98,8 +100,7 @@ def compose_show(A, s, d, note=""):
     sh1, st1 = slash_d(A, d)
     print(f"    shape : {A.shape} -- /{d} --> {sh1}      (trip count ÷ d)")
     print(f"    stride: {A.stride} -- *{d} --> {st1}      (stride × d)")
-    print(f"    总跨度不变: {A.shape[0]}×{A.stride[0]} = {sh1[0]}×{st1[0]}"
-          f" = {A.shape[0]*A.stride[0]}")
+    print(f"    采样后容量: {A.size()} / {d} = {prod(sh1)}")
     sampled = [A(n) for n in range(0, A.size(), d)]
     print(f"    实际取到的元素 A[0], A[{d}], A[{2*d}], ... = {sampled}")
 

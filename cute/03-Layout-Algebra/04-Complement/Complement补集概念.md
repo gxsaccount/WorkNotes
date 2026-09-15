@@ -1,9 +1,10 @@
 # CuTe Complement（补集）概念总结
 
-> 更新：2026-09-11 —— 补充 cotarget 非整除、单射与 permutation 的边界条件。
+> 更新：2026-09-15 —— 补充 pure complement，并按 NVIDIA CUTLASS 当前官方文档、`layout.hpp` 与 complement 单元测试复核性质、边界和措辞。
 
 > 配套文档：[`用循环理解Composition.md`](../02-Composition/用循环理解Composition.md)
 > 本文所有数值均经 NVIDIA CuTe DSL 实跑验证。
+> Pure/bounded 关系及补充推论的轻量验证：[`test_tiling_relations.py`](../代码实验/tests/test_tiling_relations.py)
 > 官方原文出处：`media/docs/cpp/cute/02_layout_algebra.md` → **Complement** 一节
 > 文中【疑问】标记 = 学习过程中真实提出过的问题，答案集中在 §9。
 
@@ -32,9 +33,40 @@ $$A \oslash B := A \circ (B, B^*)$$
 
 ---
 
-## 1. 官方定义与三条性质
+## 1. 前置概念：像集（codomain / image）
+
+Layout 是**函数** `A: [0, size) → 整数`。
+
+> **像集 = 所有坐标喂进去后得到的那批 offset 值。**
+
+```
+A = 4:2  →  像集 = { A(0), A(1), A(2), A(3) } = {0, 2, 4, 6}
+```
+
+注意：像集是**值的集合**，不计顺序、不计重复。
+
+### cosize vs size（complement 的关键区分）
+
+| 量 | 数的是什么 | `4:2` 的值 |
+|---|---|---|
+| **size** | 有几个坐标（元素个数） | **4** |
+| **cosize** | 占多大地盘（`max(像) + 1`） | **7** |
+
+`4:2` 覆盖 `{0,2,4,6}`，只 4 个元素，但跨了 7 格 —— **中间有洞**。
+
+---
+
+## 2. 官方定义与三条性质
 
 ### 🔑 一句话定义（最重要，先记住这个）
+
+NVIDIA 当前源码给出的核心定义是：
+
+> **Complement 构造一个最小、ordered、且除共同原点外与输入 Layout 的像集不相交的 Layout。**
+
+带 `cotarget` 的重载会继续扩展末端 mode，直到 `(A,A*)` 的 codomain 覆盖目标范围。
+
+在标准的单射 tiling 场景中，可以进一步把它理解为：
 
 > **`A*` = 让「A 的副本」以无重叠方式覆盖到 cotarget `M` 的那组基址。**
 >
@@ -45,7 +77,7 @@ $$A \oslash B := A \circ (B, B^*)$$
 ⚠️ **常见误解**：**A\* ≠ "A 漏掉的元素清单"**。
 例：`A = 4:1`（像 `{0,1,2,3}`，漏 20 个），但 `A* = 6:4` 只有 **6 个值** `{0,4,8,12,16,20}` —— 每个值代表**一整份 A 的拷贝**，不是单个元素。
 
-**实测五组全部"铺满 + 零重叠"**：
+**下面五组官方例子在 `(A,A*)` 层面全部“铺满 + 无重复坐标映射”**：
 
 | A | A* | 覆盖 | 铺满 0..23？ | 重叠个数 |
 |---|---|---|---|---|
@@ -80,7 +112,94 @@ Layout complement(LayoutA const& layout_a, Shape const& cotarget)
 > **R 就是返回值**，官方在写后置条件时给"输出"起的名字（就像 composition 的 post-condition 里用 `result`）。
 > 记号对照：`A` = 输入 layout，`M` = cotarget（通常只用 `size(M)`），**`R` = `complement(A, M)` 的结果**。
 
-### 三条性质（官方原文）
+### 2.1 Pure complement：不带 cotarget 的基础补集
+
+CuTe 还提供不传 `cotarget` 的形式：
+
+```cpp
+Layout complement(LayoutA const& layout_a)
+```
+
+本文称它为 **pure complement**，以便和带范围的 **bounded complement** 区分：
+
+```text
+Pure:    R       = complement(A)
+Bounded: R_M     = complement(A, M)
+```
+
+两者不是两个互不相关的算法。可以把它们理解成两个阶段：
+
+1. `complement(A)` 构造由 A 自身决定的、最小且 ordered 的基础重复规则；
+2. `complement(A,M)` 在此基础上扩展末端 mode，使 `(A,R_M)` 覆盖至少 `M`。
+
+关键区别是：**pure complement 不决定最终要复制多少份 A**。它会保留末端
+`shape=1` 的扩展方向，供后续 composition 根据另一个 Layout 的逻辑 index
+自动延伸。
+
+#### 例 1：连续的一维 tile
+
+```text
+A = 4:1
+
+complement(A)     = 1:4    // pure：只保留“每份 A 相隔 4”的规则
+complement(A,24)  = 6:4    // bounded：明确扩展成 6 份，覆盖 24
+```
+
+这里 `1:4` 不能理解成“只允许复制一份”。当它与重复布局 `B=6:1`
+做 composition 时：
+
+```text
+(1:4) ∘ (6:1) = 6:4
+```
+
+因此复制数量由 B 提供，而 tile 基址间距由 pure complement 提供。
+
+#### 例 2：内部有洞的 tile
+
+```text
+A = (2,2):(4,1)
+
+complement(A)     = (2,1):(2,8)
+complement(A,24)  = (2,3):(2,8)
+```
+
+pure 结果中的：
+
+- `2:2` 负责填补 A 内部的洞；
+- `1:8` 保留“完整块之间相隔 8”的扩展方向。
+
+若后续需要 3 个完整块，该末端 mode 才会被扩展为 `3:8`。
+
+#### 为什么 Product 使用 pure complement
+
+当前 CUTLASS `logical_product` 的核心形式是：
+
+```cpp
+make_layout(layout,
+            composition(complement(layout), tiler))
+```
+
+也就是：
+
+```text
+Repeat = complement(A)
+logical_product(A,B) = (A, Repeat ∘ B)
+```
+
+Product 中，重复数量与顺序本来就由 `B` 描述。如果先调用
+`complement(A,M)`，就必须提前根据 B 人工计算 cotarget；使用 pure
+complement 后，`Repeat` 只描述 A 的基础重复规则，再由 `Repeat∘B`
+自然生成所需的 tile 基址。
+
+> **记忆法**
+>
+> - `complement(A)`：回答“**A 的下一份应该往哪里放**？”
+> - `complement(A,M)`：回答“**为了覆盖 M，要把 A 的副本铺到多远**？”
+
+后文如果没有特别注明，`complement(A,M)` 指 bounded complement；
+Product 章节中的 `Repeat=complement(A)` 则专指 pure complement。
+
+### 三条性质（官方文档）
 
 > 1. The size (and cosize) of `R` is ***bounded*** by `size(M)`.
 > 2. `R` is ***ordered***. That is, the strides of `R` are positive and increasing. **This means that `R` is unique.**
@@ -88,11 +207,14 @@ Layout complement(LayoutA const& layout_a, Shape const& cotarget)
 
 **第 2 条最有力**：stride 正且递增 → **R 是唯一确定的**，不是"随便找一个补"。
 
-### 四条 post-condition（官方原文）
+### 四条 post-condition
+
+NVIDIA 官方 Markdown 当前把第 2 条写成了 `>=`，但这与官方单元测试及示例
+`complement(4:1,10)=3:4` 冲突。官方测试实际检查的是 `<=`，因此这里按测试修正：
 
 ```cpp
 // @post cosize(make_layout(@a layout_a, @a result))) >= size(@a cotarget)
-// @post cosize(@a result) >= round_up(size(@a cotarget), cosize(@a layout_a))
+// @post cosize(@a result) <= round_up(size(@a cotarget), cosize(@a layout_a))
 // @post for all i, 1 <= i < size(@a result),
 //         @a result(i-1) < @a result(i)
 // @post for all i, 1 <= i < size(@a result),
@@ -100,14 +222,14 @@ Layout complement(LayoutA const& layout_a, Shape const& cotarget)
 //           @a result(i) != layout_a(j)
 ```
 
-- 第 1 条：**A 和 R 拼起来**的 cosize ≥ M（实测：正好铺满）
-- 第 2 条：`R` 的 cosize ≥ `round_up(M, cosize(A))`
+- 第 1 条：**A 和 R 拼起来**的 cosize ≥ M；cotarget 不整除时可以超过 M
+- 第 2 条：`R` 的 cosize ≤ `round_up(M, cosize(A))`
 - 第 3 条：R 严格递增
 - 第 4 条：**`i` 从 1 开始** —— 见 §3
 
 ---
 
-## 1.5 🔑 Concatenation（拼接）的定义 —— 简单但至关重要
+## 2.5 🔑 Concatenation（拼接）的定义 —— 简单但至关重要
 
 > **拼接 `(X, Y)` 的偏移 = 各 mode 偏移之和：**
 > **`(X, Y)(i, j) = X(i) + Y(j)`**
@@ -151,9 +273,9 @@ B 的像 + 8                      = [8, 10, 12, 14]   ← 一致
 
 | 应用 | 说明 |
 |---|---|
-| **`(B, B*)` 是完整下标表** | 因偏移可加 → 像集 = `B的像 + B*的像` = 笛卡尔和；再由 complement 保证无重叠铺满 → **双射** |
-| **divide 结果是 permutation** | 正因 `(B,B*)` 是双射（见 §11） |
-| **`R(i,j) = (A∘B)(i) + (A∘B*)(j)`** | 两 mode 独立 → 偏移天然可加 → **所有 block 是纯平移**（见 §13） |
+| **`(B, B*)` 构造完整下标表** | 在 B 可补、拼接结果单射且 cotarget 整齐时，像集 `B的像 + B*的像` 无重复地铺满目标范围 |
+| **divide 结果何时是 permutation** | 还取决于 A 是否单射及 cotarget 是否整齐分块；详见 [Division 与 Product](../Division与Product.md) |
+| **`R(i,j) = (A∘B)(i) + (A∘B*)(j)`** | 来自 concatenation 的偏移相加；详见 [Division 与 Product](../Division与Product.md) |
 
 ### 与 by-mode（尖括号）的区别
 
@@ -194,223 +316,6 @@ B 的像 + 8                      = [8, 10, 12, 14]   ← 一致
 | **Product** | `(A, A*∘B)` | 拼接在外、组合在内 |
 
 > 判断诀窍：**看 `∘` 在括号外还是内** —— 在外则组合是外层。
-
----
-
-## 1.6 🎭 Layout 的八种物理身份（多视角速查）
-
-同一个 layout，换"物理身份"看，很多靠记的东西会变成常识。
-统一用 `A = (4,2,3):(2,1,8)`（size=24）贯穿。
-
-| # | 物理身份 | shape 是 | stride 是 | 最擅长解释 |
-|---|---|---|---|---|
-| 1 | **函数 / 映射** | 定义域 | 系数 | 数学本质、"无越界" |
-| 2 | **一维数组** | 维度长度 | — | 像集、gather |
-| 3 | **混合进制计数器** | 每位**基数** | 每位**位权** | `idx2crd`、硬边界 |
-| 4 | **向量空间 / 点积** | 各维长度 | **基向量** | 线性性、单 mode 无界 |
-| 5 | **齿轮 / 里程表** | **齿数** | 每格走多远 | coalesce（咬合） |
-| 6 | **地址生成器（硬件）** | 计数器上限 | 累加增量 | 编译期零开销 |
-| 7 | **图章 / 印花** ⭐ | 图案尺寸 | 图案内间距 | tiling、complement |
-| 8 | **递归层级** ⭐ | 图案长度 | 复制间距 | `(A0,A1,A2,...)` |
-
-### ③ 混合进制计数器（解释 `idx2crd` 与硬边界）
-
-```
-shape  = (4,2,3)  → mode-0 是 4 进制、mode-1 是 2 进制、mode-2 是 3 进制
-stride = (2,1,8)  → 各位的"位权"
-```
-
-`n` 是读数，`idx2crd` 是把它拆成各位数字：
-
-```
-n= 5 → (1,1,0)      n= 7 → (3,1,0)
-n=13 → (1,1,1)      n=23 → (3,1,2)  ← 读满
-```
-
-- **多 mode 有硬边界** —— 每位被限制在 `[0, sᵢ)`，超出就溢出/绕回 → `/d` 要求整除
-- **单 mode 无界** —— 只有一位，`crd = n` 直接是读数，**基数不参与** → 无限延伸
-
-### ④ 向量空间 / 点积（解释线性性）
-
-```
-offset = 坐标向量 · stride 向量
-n=23 → (3,1,2)·(2,1,8) = 6+1+16 = 23 ✓
-```
-
-- **concatenation 偏移相加** ← 点积的线性性（两基各贡献，天然独立）
-- **`A(n+m) ≠ A(n)+A(m)`** ← `idx2crd`（进制拆分）非线性；单 mode 时 `crd=n` 才退化为线性
-- **stride=0 = 零向量** ← 该维基向量长度为 0 → **广播**
-
-### ⑤ 齿轮 / 里程表（解释 coalesce）
-
-| | 齿轮参数 |
-|---|---|
-| **shape** | **齿数** |
-| **stride** | 每格推动走多远 |
-
-**coalesce 判据 `d₁ == s₀×d₀` 翻译成齿轮语言**：
-
-> **内层转满一圈的距离（`s₀d₀`）必须正好等于外层走一格（`d₁`）→ 两齿轮咬合，可换成大齿轮。**
-
-| 判据 | 含义 |
-|---|---|
-| `d₁ == s₀d₀` | 严丝合缝 → 合并 |
-| `d₁ > s₀d₀` | 外层跳太远 → 中间脱开有空洞 |
-| `d₁ < s₀d₀` | 落回内圈 → 齿打滑（offset 撞车） |
-
-> 这就是"合并后 stride 抄 `d₀`"的物理原因 —— 大齿轮沿用内层的每格步距。
-
-### ⑥ 地址生成器（解释"为什么值得这么复杂"）
-
-```
-address = base + Σ coord_i × stride_i
-```
-
-| layout 概念 | 硬件对应 |
-|---|---|
-| shape | 各级**计数器上限** |
-| stride | 各级**累加增量** |
-| coalesce | 优化掉一层嵌套（两级合成一级） |
-| composition | 预计算地址变换，div/mod 降级成乘加 |
-| stride=0 | 该级不累加（广播，省带宽） |
-
-- **为什么敢搬到编译期** —— layout 是纯符号表达式，`constexpr` 全算完，运行时只剩乘加，**零开销**
-- **为什么允许"走出去"** —— 地址生成器没有越界检查电路（调用者责任），只管按公式算偏移
-
-### ⑦ ⭐ 图章 / 印花（把 tiling 三件套一次性钉死）
-
-| layout 概念 | 图章类比 |
-|---|---|
-| **tile**（Product 的 A / Divide 的 B） | **印章本身**（刻的图案） |
-| **A\* / B\*** | **盖章位置表**（往哪盖、盖几次） |
-| **(tile, 位置表)** 拼接 | **盖完的整张纸** |
-| **stride** | 图案内间距 / 相邻盖章点间距 |
-| **shape** | 图案元素数 / 盖几次 |
-
-**Product = 刻章 + 印（构造式）**；**Divide = 纸上已有内容，按图章读（查询式）**
-
-```
-图章 A = 4:1，图案 = [0,1,2,3]
-B=6:1  → 位置 [0,4,8,12,16,20]
-  第0次 base= 0 |0000                    |
-  第1次 base= 4 |    1111                |
-  第2次 base= 8 |        2222            |
-  第3次 base=12 |            3333        |
-  第4次 base=16 |                4444    |
-  第5次 base=20 |                    5555|   → 盖满 24 格，无重叠 ✓
-
-B=3:1  → 位置 [0,4,8]            只盖 3 次，纸只有 12 格
-B=6:2  → 位置 [0,8,16,24,32,40]  隔位挑 → 间距 4→8，中间留洞
-```
-
-⚠️ **注意 A\* 随 B 重算** —— cotarget = `size(A) × cosize(B)`，B 变了 A\* 也变。
-
-**blocked vs raked = 盖章顺序不同**
-
-```
-blocked（A 在前）: [t0e0, t0e1, t1e0, t1e1, t2e0, t2e1]  ← tile 是实心块
-raked  （B 在前）: [t0e0, t1e0, t2e0, t0e1, t1e1, t2e1]  ← 交错/耙开
-```
-
-**用图章视角回看之前的困惑**：
-
-| 困惑 | 图章视角 |
-|---|---|
-| A\* 为什么不是"漏掉的元素清单" | 位置表记"往哪盖"（6 个位置），不是"哪些格空着"（20 格）——**每个位置代表一整份图案** |
-| 为什么拼起来就铺满 | 图章无重叠盖满 = complement 的 disjoint + complete |
-| 为什么 `A∘B` 只有 tile 0 | `B*(0)=0` → 第一个盖章位置是 0 |
-| stride=0 为什么是广播 | 印章那一维没有图案变化，盖到哪都一样 |
-| 单 block 为何能推广到全部 | **同一枚章，换个位置再盖** —— 图案相同，只差 base |
-
-### ⑧ ⭐ 递归层级观：`(A0, A1, A2, ...)`
-
-> **`A₀` 是基础图案；`A₁` 描述"这个图案（及其补洞）如何铺成 block 并复制"；`A₂` 描述"这个 block 如何复制"…… 依此类推。**
-
-实测递归验证（紧密情形）：
-
-```
-(A0, A1)      A0 = 4:1    A1 = 6:4   → A1 说：A0 复制 6 份，每份 +4
-                                        ↑ 4 == cosize(A0) = 4 ✓
-(A0,A1,A2)    A2 = 2:24               → A2 说：24 格的 block 复制 2 份，每份 +24
-                                        ↑ 24 == cosize(前两层) = 24 ✓
-```
-
-| 层 | stride | 前面所有层的 cosize | 相等？ |
-|---|---|---|---|
-| A1 | 4 | 4 | ✓ |
-| A2 | 24 | 24 | ✓ |
-
-> **紧密情形下：A₍ᵢ₊₁₎ 的 stride = 前 i 层拼成的 cosize —— 这正是 coalesce 判据 `d_next == s_cur×d_cur`。**
-
-**这个视角把三件事统一成一句话**：concatenation（层级）+ complement（补洞）+ coalesce（是否紧密）。
-
-**三处但书**：
-
-**① A0 自身不连续时，A1 要先补洞**
-
-```
-A0 = 4:2（像 {0,2,4,6}，cosize=7，有洞）
-A1 = (2,3):(1,8)
-     ├─ mode-0 = 2:1   stride=1，先补 A0 的洞（补成 0..7）
-     └─ mode-1 = 3:8   stride=8，才是"复制 3 份"
-```
-
-A1 自己可能是多层的 —— **这正是 complement 的"先填洞、再重复"，与层级观是同一件事的两种说法。**
-
-**② stride 可以 > cosize（故意留洞）**
-
-| A1 | 覆盖 | 铺满？ |
-|---|---|---|
-| `6:4`（= cosize(A0)） | 24 格 | ✓ 紧密 |
-| `6:8`（> cosize(A0)） | 24 格，span 到 43 | ✗ **留洞** |
-
-留洞正是 raked / 稀疏排布的来源。
-
-**③ 谁是内层，决定谁连续**
-
-```
-blocked = (A的mode..., B的mode...)  → A0 实心块
-raked   = (B的mode..., A的mode...)  → A0 被耙开
-```
-
-### 遇到问题用哪个视角
-
-| 你困惑什么 | 用哪个视角 |
-|---|---|
-| `idx2crd` / 为什么有界 | **混合进制** |
-| 单 mode 为什么无界 | **混合进制**（只有一位） |
-| coalesce 为什么 `d₁==s₀d₀` | **齿轮咬合** |
-| 拼接为什么偏移相加 | **点积线性性** |
-| stride=0 为什么是广播 | **零向量** |
-| 为什么能"走出 tile" | **函数 / 地址生成器** |
-| tiling / complement / divide / product | **图章印花** ⭐ |
-| `(A0,A1,A2,...)` 层级、blocked/raked | **递归层级** ⭐ |
-| 这些抽象图啥 | **地址生成器**（编译期零开销） |
-
-> **一句话**：同一个 layout，数学上是函数，结构上像混合进制计数器，几何上是基向量，机械上是齿轮组，硬件上是地址生成器，用法上是图章，组织上是递归层级。视角越多，越不容易记混。
-
----
-
-## 2. 像集（codomain / image）
-
-Layout 是**函数** `A: [0, size) → 整数`。
-
-> **像集 = 所有坐标喂进去后得到的那批 offset 值。**
-
-```
-A = 4:2  →  像集 = { A(0), A(1), A(2), A(3) } = {0, 2, 4, 6}
-```
-
-注意：像集是**值的集合**，不计顺序、不计重复。
-
-### cosize vs size（complement 的关键区分）
-
-| 量 | 数的是什么 | `4:2` 的值 |
-|---|---|---|
-| **size** | 有几个坐标（元素个数） | **4** |
-| **cosize** | 占多大地盘（`max(像) + 1`） | **7** |
-
-`4:2` 覆盖 `{0,2,4,6}`，只 4 个元素，但跨了 7 格 —— **中间有洞**。
 
 ---
 
@@ -481,7 +386,12 @@ L(0,1) = 0×1 + 1×1 = 1
 
 对 complement / divide 的影响：
 
-- `complement(B, ...)` 需要 tiler `B` 能表示为不重叠的重复；CuTe 会在可静态判断时拒绝非单射 tiler。
+- 不能简单写成“`complement` 拒绝所有非单射 Layout”。当前实现会先
+  `filter(layout)`，shape-1 和 stride-0 mode 会先被过滤；官方单元测试也覆盖了
+  `4:0`。
+- 某些无法形成合法补布局的静态 Layout 会触发
+  `Non-injective Layout detected in complement`。更准确地说，这是 complement
+  算法无法为该 Layout 构造有效的 ordered 补布局。
 - 即使 `(B,B*)` 是单射，下游的 `A∘(B,B*)` 仍可能因 **A** 广播或别名而非单射。
 - 因而“divide 是 permutation”必须同时要求：`A` 单射、tiler 可补、目标整齐分块。
 
@@ -764,7 +674,8 @@ complement(4:2, 24) 的层级：
 //           result(i) != layout_a(j)
 ```
 
-> **真正的约束：除 `A+0` 外，其余副本 `A+r`（r ≠ 0）必须两两不交，且都不碰 A。**
+> 官方直接约束的是：除 `R(0)=0` 外，R 的值不能与 A 的值相同。若要把
+> `(A,R)` 当作无重复 tiling，还应另外验证拼接后的 Layout 是单射。
 
 ### 六例实测（全部通过）
 
@@ -777,15 +688,21 @@ complement(4:2, 24) 的层级：
 | `(2,4) → 3:2` | `{0,2,4}` | ✓ | ✓ | ✓ |
 | `(2,2) → (3,2):(2,12)` | `{0,2,4,12,14,16}` | ✓ | ✓ | ✓ |
 
-**A 和 R 的所有副本加起来，无重叠、无遗漏地铺满 `0..M-1`** —— 这就是官方说的 *"disjoint codomains"* + *"complete the codomain"*。
+在上面六个整齐分块例子中，`(A,R)` 无重复、无遗漏地铺满了 `0..M-1`。
+这是这些例子的验证结果；cotarget 不整除时只能保证覆盖至少到 M。
 
-> ⚠️ 重叠**只发生在 `A+0` 这一处**（且是原件本身）。一旦两个不同副本 `A+r₁`、`A+r₂` 撞车，tiling 会重复覆盖同一块内存 —— 这是不允许的。
+> ⚠️ `A(0)=R(0)=0` 是两个 Layout 像集的共同原点，不应描述成两个副本发生了重叠。
+> 不同平移副本是否互不相交，应通过检查 `(A,R)` 的单射性来确认。
 
 ---
 
 ## 8. "ordered" 性质是结构的自然结果
 
 官方第 2 条要求 R 的 stride 正且递增。用 §6 模型立刻得到解释：
+
+这里说的是 R 按自然 index 得到的值严格递增。像 `1:0` 这种只有一个坐标的退化结果，
+没有相邻元素需要比较，因此按 post-condition 是 vacuously true；不要据此要求它唯一的
+stride `0` 也必须为正。
 
 | 例子 | 填洞 stride（副本间距） | 重复 stride（块大小） | 递增？ |
 |---|---|---|---|
@@ -805,10 +722,7 @@ complement(4:2, 24) 的层级：
 | 3 | **(4,2) 怎么突然冒出来的？** | 那是我**临时拼的验证结构**（`A` + 补），用来验证"填完洞后一块铺满 0..7"。**官方没这么写，R 里也不含 A**。官方的结构是 `(A, R)` 拼整体（cosize ≥ M）。是我表述时没说清来源 |
 | 4 | **官方怎么说的？** | 官方原话就是 **hole → filled → repeated**（*"The 'hole' in `4:2` is filled with `2:1` first, then everything is repeated 3 times with `3:8`"*），总结为 **"layout of the repetition"**。我一度说"填洞不准"是我讲岔了 —— "填洞"和"副本平移"是同一现象的两种视角（从缺什么看 / 从补什么看），算出来同一个 `2:1` |
 | 5 | **每个 mode `s:d` 都是"重复 s 次、每次 +d"？** | **是的**，这是 layout mode 的通用定义。complement 里 mode-0 复制 A（填洞成块）、mode-1 复制块（重复铺满 M）—— 同一操作的两级 |
-| 6 | **A+0 是允许重叠吗？** | **不是"允许"，是必然** —— `A+0` 就是 A 本身（原件）。因 `R(0)=0` 恒成立。约束真正说的是：**其余副本 `A+r`（r≠0）必须两两不交** |
-| 7 | **composition 只得到部分元素，divide 得到全部？** | **在整齐分块且 A 单射时，对**。差别在定义域：`composition(A,B)` 定义域 = `size(B)`（1 个 tile）；`divide(A,B)` 的定义域是 `size((B,B*))`。若 cotarget 恰好整除完整周期，它才等于 `size(A)` 并覆盖 A 的全部元素；否则可能向上取整、末尾超过目标。A 若广播或其他非单射，结果还会有重复 |
-| 8 | **`A ∘ B` 一定只是 tile 0 吗？** | **是**，因为 **`B*(0) = 0` 恒成立** → `(B,B*)` 展开的前 `size(B)` 个坐标 = `B 的像 + 0` = tile 0 的索引集。更准的说法：`A ∘ B` 是**原型 tile**（tile 的形状），同时恰好是 tile 0。注意前提：`composition` 得成功 |
-| 9 | **单 block 的 `A∘B` 能推广到所有 block 吗？** | **能，官方认可**。官方 API `local_tile` / `inner_partition` 就是干这个：`cta_a = tiled_a(_, blockIdx)`，每个 block 拿到的 **形状恒为 `(_4,_8)`**。官方称 `B*` 为 "layout of the tiles"、用 "repeats/repetition" 描述。实测 divide = `(A∘B, A∘B*)`，你的 layout 原封不动 |
+| 6 | **A+0 是允许重叠吗？** | **不是“允许”，是必然**——`A+0` 就是 A 本身。官方直接约束的是 `R(i)`（`i≥1`）不能等于任何 `A(j)`；若用于无重复 tiling，还应验证 `(A,R)` 的单射性 |
 
 ---
 
@@ -818,13 +732,36 @@ complement(4:2, 24) 的层级：
 
 | 术语 | 含义 |
 |---|---|
-| **complement(A, M)** | 求 A 的"补" R，使得 A 的完整副本无重叠地覆盖**至少** M；若周期整除 M 才恰好铺满 M |
+| **complement(A)** | **pure complement**：求只由 A 决定的最小基础重复规则；保留末端 `shape=1` 扩展 mode，不预先决定复制数量 |
+| **complement(A, M)** | **bounded complement**：在 pure complement 的基础上扩展末端 mode，使 A 的完整副本覆盖**至少** M；若周期整除 M 才恰好铺满 M |
 | **cotarget M** | 目标范围，通常只用 `size(M)` |
 | **cosize** | `max(像) + 1`，占多大地盘 |
 | **像集 / codomain** | layout 能取到的 offset 值的集合 |
 | **B\* / A\*** | `complement` 的结果，读作"**重复的方式**" |
 
+### Pure / bounded 对照
+
+| 对比 | Pure complement | Bounded complement |
+|---|---|---|
+| 调用 | `complement(A)` | `complement(A,M)` |
+| 是否依赖 M | 否，只由 A 决定 | 是 |
+| 末端重复 mode | 保留 `shape=1`，等待后续扩展 | 按 M 扩展到足够的 shape |
+| 回答的问题 | A 的副本应按什么基础间距摆放？ | 为覆盖 M，需要铺多少份 A？ |
+| 典型用途 | `logical_product` | `logical_divide` |
+| `A=4:1` | `1:4` | `M=24` 时为 `6:4` |
+
 ### 计算步骤
+
+**Pure complement：**
+
+```text
+① 算 A 的像集与 cosize
+② 【填洞】找规整 H，使 A+H 形成一个完整块
+③ 【保留扩展方向】追加末端 shape=1 mode，stride 为完整块大小
+④ 【合并】保留 Product 后续 composition 所需的末端 shape-1 mode
+```
+
+**Bounded complement：**
 
 ```
 ① 算 A 的像集与 cosize
@@ -839,6 +776,9 @@ complement(4:2, 24) 的层级：
 ```
 logical_divide(A, B) = composition(A, (B, complement(B, size(A))))
                                         ↑ 本文的 R，即 B*
+
+logical_product(A, B) = (A, complement(A) ∘ B)
+                            ↑ pure complement
 ```
 
 > `B` = tile 内部，`B*` = tile 的布局（这堆 tile 怎么摆）。
@@ -846,233 +786,18 @@ logical_divide(A, B) = composition(A, (B, complement(B, size(A))))
 
 ---
 
-## 11. Composition vs Divide：覆盖范围的对比
+## 11. 与 Division / Product 的关系
 
-> 【疑问 7】**"composition 是组合 A 和 B 的映射方式，只得到部分元素；divide 可以遍历、得到所有元素？"**
+Complement 是后续 tiling 运算的基础，但详细的 Divide、Product、tile 0、
+`local_tile` 和 permutation 讨论不属于 Complement 本节，统一移至：
 
-**这个理解完全正确。** 两者的差别就在**定义域大小**。
+- [Division 与 Product（Tiling 的两半）](../Division与Product.md)
 
-### 核心对比（实测）
-
-```
-A = (4,2,3):(2,1,8)     24 个元素
-B = 4:2                 tile = 隔 2 取 4 个
-B* = complement(4:2,24) = (2,3):(1,8)
-```
-
-| 运算 | 定义域（坐标空间） | 覆盖元素 | 实测 |
-|---|---|---|---|
-| **`composition(A, B)`** | `size(B) = 4` | **4 个 / 24 个** | `[0,4,1,5]` ← **只是 tile 0** |
-| **`divide(A, B)`** | `size((B,B*)) = 4×6 = 24` | **24 个 / 24 个** | 全部 ✓ |
-
-### 这是“整齐分块”例子的数字结果
-
-```
-B  的像集大小 = 4    （tile 内部的位置）
-B* 的像集大小 = 6    （6 个 tile 的起点）
-(B, B*)       = 4 × 6 = 24 = size(A)   ← 正好全覆盖
-```
-
-**单靠 B 只够得着 1 个 tile；补上 B\* 的起点才得到其余 tile。** 本例恰好有 `4×6=24`，所以刚好覆盖 A 的全部。
-
-⚠️ 一般不能从公式推出 `size((B,B*)) == size(A)`：`complement` 为了保持完整块会向上取整。比如 `A=10:1, B=4:1` 时，`B*=3:4`，因此 `size((B,B*))=12 > size(A)=10`。
-
-### 两处措辞打磨
-
-**① "只有部分元素" → 更准的说法是"定义域小"（元素没丢，是够不着）**
-
-```
-composition(A, B) 的定义域 = B 的坐标空间（size = 4）
-divide(A, B)      的定义域 = (B,B*) 的坐标空间（size = 24）
-```
-
-元素一直在那儿（一个没丢），只是 composition 这个**函数够不着**另外 20 个。
-
-**② "组合两种映射" → 应记为"链式代入"**
-
-`R(c) = A(B(c))` 是**函数复合**（先算 B 再喂给 A），不是"把两种方式组合起来"：
-
-```
-坐标 c  --B-->  一个下标 n  --A-->  offset
-```
-
----
-
-## 12. 🔑 `A ∘ B` 就是 tile 0（为什么"一定"）
-
-> 【疑问 8】**"composition `A ∘ B` 一定只是 tile 0 是吧？"**
-
-**是的** —— 根本原因是：
-
-> **`B*(0) = 0` 恒成立**（stride 全正时，坐标全 0 → 偏移 0）
-
-实测六个 complement 结果，`B*(0)` 全部为 0：
-
-| `B*` | `6:4` | `4:1` | `(2,3):(1,8)` | `(3,2):(2,12)` | `1:0` | `3:2` |
-|---|---|---|---|---|---|---|
-| `B*(0)` | 0 | 0 | 0 | 0 | 0 | 0 |
-
-**因为 `B*(0) = 0`，所以 `(B, B*)` 展开的前 `size(B)` 个坐标
-恰好 = `B 的像 + 0` = `B 的像本身` = tile 0 的索引集。**
-
-### 实测（1-D 例子）
-
-```
-A ∘ B (composition)  = [0, 4, 1, 5]
-divide 的 tile 0     = [0, 4, 1, 5]     ← 完全相同 ✓
-
-其余 tile 的索引集 = B 的像 + B*(j)：
-  tile 0: 索引 {0,2,4,6}     值 [0,4,1,5]
-  tile 1: 索引 {1,3,5,7}     值 [2,6,3,7]      ← B*(1)=1
-  tile 2: 索引 {8,10,12,14}  值 [8,12,9,13]    ← B*(2)=8
-  tile 3: 索引 {9,11,13,15}  值 [10,14,11,15]  ← B*(3)=9
-  tile 4: 索引 {16,18,20,22} 值 [16,20,17,21]  ← B*(4)=16
-  tile 5: 索引 {17,19,21,23} 值 [18,22,19,23]  ← B*(5)=17
-```
-
-### 官方佐证
-
-> *"the first mode of each mode of the result is the sublayout `(3,(2,4)):(177,(13,2))` and is **precisely the result we would have received if we had applied `composition` instead of `logical_divide`**."*
-
-配合恒等式 **`layout<0>(zipped_divide(a,b)) == composition(a,b)`** —— 实测 2-D 例子两者完全一致。
-
-### 两个注意点
-
-**① 更准确的说法：`A ∘ B` 是"原型 tile"（tile 的形状）**
-
-它**同时恰好是 tile 0**（因 `B*(0)=0`）。其余 tile 在**索引**上是 `B 的像 + B*(j)` 的平移，但**值**上一般不等于 `tile0 + B*(j)`（因 A 非线性，`A(n+m) ≠ A(n)+A(m)`）。
-
-**② "一定"有个前提：`composition` 得成功**
-
-若 `A ∘ B` 因 divisibility condition 报错，则 `divide` 必然也失败（divide 内部就包含这一步）。
-
-**③ 退化情形：`B* = 1:0`（B 已铺满 A）**
-
-此时只有 **1 个 tile**，`A ∘ B` 既是 tile 0，也是**全部**。
-
-### 附带：`tile 0` 总包含偏移 0
-
-因 `B` 的像含 0、且 `A(0) = 0` 恒成立 → **tile 0 必含偏移 0**，是"最靠前"的那个 tile。
-
----
-
-## 13. 🔑 单 block 设计 → 推广到所有 block（**官方认可**）
-
-> 【疑问 9】**"我的一个 block 用了 `A ∘ B`，可以通过 divide 推广到其他 block 吗？"**
->
-> **可以 —— 这正是 CuTe 最核心的惯用法，官方有专门 API：`local_tile` / `inner_partition`。**
-
-### 官方原文（Tensor 文档 · Inner and outer partitioning）
-
-```cpp
-Tensor A = make_tensor(ptr, make_shape(8,24));  // (8,24)
-auto tiler = Shape<_4,_8>{};                    // (_4,_8)
-
-Tensor tiled_a = zipped_divide(A, tiler);       // ((_4,_8),(2,3))
-
-// 给每个 threadgroup 一个 4x8 tile
-Tensor cta_a = tiled_a(make_coord(_,_), make_coord(blockIdx.x, blockIdx.y));  // (_4,_8)
-```
-
-> *"We call this an **inner-partition** because it keeps the inner "tile" mode. This pattern of applying a tiler and then slicing out that tile by indexing into the remainder mode is common and has been wrapped into its own function `inner_partition(Tensor, Tiler, Coord)`. You'll often see **`local_tile(Tensor, Tiler, Coord)`** which is just another name for `inner_partition`. **The `local_tile` partitioner is very often applied at the threadgroup level to partition tensors into tiles across threadgroups.**"*
-
-**注意那句注释 `// (_4,_8)`** —— 无论 `blockIdx.x/y` 是多少，取出来的 tile **形状恒为 `(_4,_8)`**。
-
-> **这就是"所有 block 共享同一份 layout"的官方铁证**：用 `blockIdx` 索引第二个 mode，每个 block 拿到的都是同样结构的 tile。
-
-### 官方原文：`B*` 就是"tile 的布局"
-
-| 出处 | 原文 |
-|---|---|
-| Divide（§413） | *"If `B` is the "tiler", then **`B*` is the layout of the tiles**."* |
-| Complement（§379） | *"The complement effectively **"repeats" the original layout**... can be viewed as the **"layout of the repetition"**."* |
-| Product（§512） | *"If `A` is the "tile", then `A*` is the **layout of repetitions** that are available for `B`."* |
-| Product（§525） | *"The layout `B` describes the **number and order of repetitions of `A`**."* |
-
-**"repeats / repetition"（重复）这个措辞本身就意味着：同一份 layout 再来一次 —— 即所有 block 共享同一份内部 layout。**
-
-### 实测：divide = 你的 layout + 一份 block 偏移表
-
-```
-A ∘ B   = (2,2):(4,1)              ← 你的 per-block layout（原封不动）
-A ∘ B*  = (2,3):(2,8)              ← block 偏移表（B* 带来的）
-divide  = ((2,2),(2,3)):((4,1),(2,8))    ← 两者拼接
-```
-
-这是**左分配律**的直接结果：
-
-```
-A ∘ (B, B*) = (A ∘ B, A ∘ B*)
-```
-
-**你设计的 `A ∘ B` 一点没改，divide 只是给它配了一张"去哪找其他 block"的表。**
-
-### 所有 block 是"纯平移"吗 —— **是，但这是数学结构的推论**
-
-实测（1-D 例子，6 个 tile）：
-
-| block j | base = `(A∘B*)(j)` | 值 | `== tile0 + base`？ |
-|---|---|---|---|
-| 0 | 0 | `[0, 4, 1, 5]` | ✓ |
-| 1 | 2 | `[2, 6, 3, 7]` | ✓ |
-| 2 | 8 | `[8, 12, 9, 13]` | ✓ |
-| 3 | 10 | `[10, 14, 11, 15]` | ✓ |
-| 4 | 16 | `[16, 20, 17, 21]` | ✓ |
-| 5 | 18 | `[18, 22, 19, 23]` | ✓ |
-
-**全部 `True`。** 结构上的原因：
-
-```
-R(i, j) = (A∘B)(i) + (A∘B*)(j)
-          └─ block 内 ─┘   └─ block 基址 ─┘
-```
-
-因为 `(A∘B, A∘B*)` 是 **concatenation**，两个 mode 的 stride 互相独立 → **偏移天然可加**。
-
-> ⚠️ **诚实标注**：官方**没有**直接写出 `R(i,j) = (A∘B)(i) + (A∘B*)(j)` 这个公式。
-> 这是 **concatenation 定义的直接数学推论**（layout 的偏移 = 各 mode 偏移之和），加上我们实测验证（全部 True）。
-> 官方用的是 *"repeats" / "layout of the repetition"* 来描述同一事实。
-
-### 完整的官方用法链（两条腿）
-
-单纯的 `local_tile` 只解决"block 拿哪块"。**block 内部按线程分配**要靠另一条腿 —— composition：
-
-> *"With **`composition`** the target data layout is transformed according to our TV-layout and then we can simply slice into the thread-mode of the result with our thread index."*（Tensor 文档 · Thread-Value partitioning）
-
-| 步骤 | 用什么 | 解决什么 |
-|---|---|---|
-| ① 切 tile | `zipped_divide` / `local_tile` | block 拿哪块（**推广到所有 block**） |
-| ② tile 内分线程 | `composition` + TV-layout | 每个线程拿哪些元素（**你的 `A ∘ B`**） |
-
-对应两种 partition：
-
-| 名称 | 写法 | 保留的 mode | 用途 |
-|---|---|---|---|
-| **inner-partition** | `local_tile(T, tiler, coord)` | **tile mode** | CTA 拿哪块（`(_4,_8)`） |
-| **outer-partition** | `local_partition(T, layout, idx)` | **rest mode** | 线程分块内元素 |
-
-### 三个前提
-
-**① `A ∘ B` 本身得成功** —— 若 divisibility condition 报错，divide 必然也失败。
-
-**② 先区分“tiler 的下标表”与“最终 result”** —— 成功构造 complement 时，`(B,B*)` 是无重叠的完整下标表（cotarget 整齐时是该范围上的双射）。但 `divide = A∘(B,B*)` 是否单射，还取决于 **A**：
+本节只保留最直接的连接公式：
 
 ```text
-A = 10:0       # 广播：任何坐标都映射到 0
-B = 4:1
-B* = 3:4
-divide(A,B) = 12:0   # 12 个坐标全是 offset 0，不是 permutation
+logical_divide(A,B) = A ∘ (B, complement(B,size(A)))
 ```
-
-因此，只有在 **A 单射**、tiler 可补、并且 cotarget 恰好整齐分块时，才可以把 divide 结果称作覆盖 A 的 permutation；否则更稳妥的术语是 reindex / gather。
-
-**③ 真实 kernel 通常要切两层** —— CTA tile → thread tile，每级都是同一套路。
-
-### 官方佐证：Product 与 Divide 结果一致
-
-> *"Note that the result is **identical** to the result of the 1-D Logical Divide example."*
-
-Product `((2,2),(2,3)):((4,1),(2,8))` == Divide 的结果 —— 说明"从 tile 拼出全图"和"把全图切成 tile"是互逆的同一结构。
 
 ---
 
