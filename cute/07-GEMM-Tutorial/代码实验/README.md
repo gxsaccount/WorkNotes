@@ -3,6 +3,8 @@
 > 来源：NVIDIA CUTLASS `main`，commit `147295a3`
 >
 > 同步日期：2026-09-21
+>
+> 中文注释整理：2026-09-22
 
 本目录保存官方教程源码的本地副本：
 
@@ -20,7 +22,10 @@ reference_check.hpp
 CPU reference GEMM
 最大绝对/相对误差统计
 PASS/FAIL 与非零失败退出码
+中文教学注释
 ```
+
+源码顶部的 NVIDIA BSD 许可证原文保持不变；其余英文教学注释已翻译为中文。
 
 ## 本地检查器测试
 

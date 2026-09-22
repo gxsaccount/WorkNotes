@@ -18,7 +18,7 @@ template <class Output>
 constexpr ResultTolerance default_tolerance()
 {
   if constexpr (sizeof(Output) <= 2) {
-    // The SM80 tutorial uses FP16 accumulation and output.
+    // SM80 教程使用 FP16 accumulator 和 FP16 输出。
     return {1.0, 0.10};
   } else {
     return {5.0e-3, 5.0e-3};
@@ -141,4 +141,4 @@ bool check_gemm_result(
   return true;
 }
 
-} // namespace cute_tutorial
+} // cute_tutorial 命名空间结束

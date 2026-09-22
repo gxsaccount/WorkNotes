@@ -96,7 +96,7 @@ void test_tn_and_failure()
       {1.0e-6, 1.0e-6}, false));
 }
 
-} // namespace
+} // 匿名命名空间结束
 
 int main()
 {

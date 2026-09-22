@@ -58,12 +58,12 @@ gemm_device(ProblemShape shape_MNK, CtaTiler cta_tiler,
 {
   using namespace cute;
 
-  // Preconditions
+  // 前置条件
   CUTE_STATIC_ASSERT_V(rank(shape_MNK) == Int<3>{});                   // (M, N, K)
   CUTE_STATIC_ASSERT_V(rank(cta_tiler) == Int<3>{});                   // (BLK_M, BLK_N, BLK_K)
 
-  CUTE_STATIC_ASSERT_V(size(copy_a) == size(mma));                     // NumThreads
-  CUTE_STATIC_ASSERT_V(size(copy_b) == size(mma));                     // NumThreads
+  CUTE_STATIC_ASSERT_V(size(copy_a) == size(mma));                     // 线程总数
+  CUTE_STATIC_ASSERT_V(size(copy_b) == size(mma));                     // 线程总数
 
   static_assert(is_static<ASmemLayout>::value);
   static_assert(is_static<BSmemLayout>::value);
@@ -76,47 +76,47 @@ gemm_device(ProblemShape shape_MNK, CtaTiler cta_tiler,
   CUTE_STATIC_ASSERT_V(size<1>(ASmemLayout{}) == size<2>(cta_tiler));  // BLK_K
   CUTE_STATIC_ASSERT_V(size<1>(BSmemLayout{}) == size<2>(cta_tiler));  // BLK_K
 
-  CUTE_STATIC_ASSERT_V(congruent(select<0,2>(shape_MNK), dA));         // dA strides for shape MK
-  CUTE_STATIC_ASSERT_V(congruent(select<1,2>(shape_MNK), dB));         // dB strides for shape NK
-  CUTE_STATIC_ASSERT_V(congruent(select<0,1>(shape_MNK), dC));         // dC strides for shape MN
+  CUTE_STATIC_ASSERT_V(congruent(select<0,2>(shape_MNK), dA));         // dA 的 Stride 必须与 MK Shape 兼容
+  CUTE_STATIC_ASSERT_V(congruent(select<1,2>(shape_MNK), dB));         // dB 的 Stride 必须与 NK Shape 兼容
+  CUTE_STATIC_ASSERT_V(congruent(select<0,1>(shape_MNK), dC));         // dC 的 Stride 必须与 MN Shape 兼容
 
   //
-  // Full and Tiled Tensors
+  // 完整 Tensor 与分块 Tensor
   //
 
-  // Represent the full tensors
+  // 构造完整矩阵 Tensor
   Tensor mA = make_tensor(make_gmem_ptr(A), select<0,2>(shape_MNK), dA); // (M,K)
   Tensor mB = make_tensor(make_gmem_ptr(B), select<1,2>(shape_MNK), dB); // (N,K)
   Tensor mC = make_tensor(make_gmem_ptr(C), select<0,1>(shape_MNK), dC); // (M,N)
 
-  // Get the appropriate blocks for this thread block
+  // 取得当前 thread block 对应的矩阵块
   auto cta_coord = make_coord(blockIdx.x, blockIdx.y, _);              // (m,n,k)
   Tensor gA = local_tile(mA, cta_tiler, cta_coord, Step<_1, X,_1>{});  // (BLK_M,BLK_K,k)
   Tensor gB = local_tile(mB, cta_tiler, cta_coord, Step< X,_1,_1>{});  // (BLK_N,BLK_K,k)
   Tensor gC = local_tile(mC, cta_tiler, cta_coord, Step<_1,_1, X>{});  // (BLK_M,BLK_N)
 
-  // Shared memory buffers
+  // Shared memory 缓冲区
   __shared__ TA smemA[cosize_v<ASmemLayout>];
   __shared__ TB smemB[cosize_v<BSmemLayout>];
   Tensor sA = make_tensor(make_smem_ptr(smemA), sA_layout);            // (BLK_M,BLK_K)
   Tensor sB = make_tensor(make_smem_ptr(smemB), sB_layout);            // (BLK_N,BLK_K)
 
   //
-  // Partition the copying of A and B tiles across the threads
+  // 将 A、B tile 的搬运任务划分到各线程
   //
 
-  // TUTORIAL: Example of partitioning via a TiledCopy
+  // 教程：使用 TiledCopy 进行分区
 
   ThrCopy thr_copy_a = copy_a.get_slice(threadIdx.x);
   Tensor tAgA = thr_copy_a.partition_S(gA);                            // (CPY,CPY_M,CPY_K,k)
   Tensor tAsA = thr_copy_a.partition_D(sA);                            // (CPY,CPY_M,CPY_K)
-  // Allocate registers same shape/layout as partitioned data
+  // 分配与分区数据 Shape/Layout 相同的寄存器
   Tensor tArA = make_fragment_like(tAsA);                              // (CPY,CPY_M,CPY_K)
 
   ThrCopy thr_copy_b = copy_b.get_slice(threadIdx.x);
   Tensor tBgB = thr_copy_b.partition_S(gB);                            // (CPY,CPY_N,CPY_K,k)
   Tensor tBsB = thr_copy_b.partition_D(sB);                            // (CPY,CPY_N,CPY_K)
-  // Allocate registers same shape/layout as partitioned data
+  // 分配与分区数据 Shape/Layout 相同的寄存器
   Tensor tBrB = make_fragment_like(tBsB);                              // (CPY,CPY_N,CPY_K)
 
   CUTE_STATIC_ASSERT_V(size<1>(tAgA) == size<1>(tAsA));                // CPY_M
@@ -128,21 +128,21 @@ gemm_device(ProblemShape shape_MNK, CtaTiler cta_tiler,
   CUTE_STATIC_ASSERT_V(size<2>(tBgB) == size<2>(tBsB));                // CPY_K
   CUTE_STATIC_ASSERT_V(size<2>(tBgB) == size<2>(tBrB));                // CPY_K
 
-  // Copy gmem to rmem for k_tile=0
+  // 预取 k_tile=0：gmem → rmem
   copy(copy_a, tAgA(_,_,_,0), tArA);
   copy(copy_b, tBgB(_,_,_,0), tBrB);
   //
-  // Define A/B partitioning and C accumulators
+  // 定义 A/B 的计算分区与 C accumulator
   //
 
-  // TUTORIAL: Example of partitioning via a TiledMMA
+  // 教程：使用 TiledMMA 进行分区
 
   ThrMMA thr_mma = mma.get_slice(threadIdx.x);
   Tensor tCsA = thr_mma.partition_A(sA);                               // (MMA,MMA_M,MMA_K)
   Tensor tCsB = thr_mma.partition_B(sB);                               // (MMA,MMA_N,MMA_K)
   Tensor tCgC = thr_mma.partition_C(gC);                               // (MMA,MMA_M,MMA_N)
 
-  // Allocate the accumulators -- same size as the projected data
+  // 分配 accumulator，其大小与投影后的数据相同
   Tensor tCrC = thr_mma.make_fragment_C(tCgC);                         // (MMA,MMA_M,MMA_N)
 
   CUTE_STATIC_ASSERT_V(  shape(tCrC) ==   shape(tCgC));                // (MMA,MMA_M,MMA_N)
@@ -150,7 +150,7 @@ gemm_device(ProblemShape shape_MNK, CtaTiler cta_tiler,
   CUTE_STATIC_ASSERT_V(size<2>(tCgC) == size<1>(tCsB));                // MMA_N
   CUTE_STATIC_ASSERT_V(size<2>(tCsA) == size<2>(tCsB));                // MMA_K
 
-  // Clear the accumulators
+  // 清零 accumulator
   clear(tCrC);
 
 #if 0
@@ -188,26 +188,26 @@ gemm_device(ProblemShape shape_MNK, CtaTiler cta_tiler,
 
 #if 1
 
-  // TUTORIAL: Example of an inner loop that pipelines compute with reads
-  //           from global memory by staging through register and shared memory.
-  //   Data is read from global to registers, then to shared via the TiledCopy partitions
-  //   gemm(.) operates on the shared memory directly via the TiledMMA partitions
+  // 教程：将计算与读取重叠的内层流水循环
+  //           数据从 global memory 经 register 和 shared memory 分级暂存
+  //   数据先从 global 读到 register，再通过 TiledCopy 分区写入 shared
+  //   gemm(.) 通过 TiledMMA 分区直接使用 shared memory
 
   auto K_TILE_MAX = size<3>(tAgA);
 
   for (int k_tile = 0; k_tile < K_TILE_MAX; ++k_tile)
   {
-    // Copy rmem to smem with tA|tB thread-partitioned tensors
-    __syncthreads();         // Wait for all threads to consume smem
+    // 使用按 tA/tB 分区的 Tensor 将 rmem 搬到 smem
+    __syncthreads();         // 等待所有线程使用完当前 smem 数据
     copy(tArA, tAsA);
     copy(tBrB, tBsB);
-    __syncthreads();         // Wait for all threads to consume smem
+    __syncthreads();         // 等待所有线程使用完当前 smem 数据
 
-    // Copy gmem to rmem for k_tile+1 with tA|tB thread-partitioned tensors
+    // 使用按 tA/tB 分区的 Tensor 预取下一 k_tile：gmem → rmem
     int k_tile_next = (k_tile + 1 < K_TILE_MAX) ? k_tile + 1 : k_tile;
     copy(copy_a, tAgA(_,_,_,k_tile_next), tArA);
     copy(copy_b, tBgB(_,_,_,k_tile_next), tBrB);
-    // TUTORIAL: The above call to copy(copy_a, tAgA(_,_,_,k_tile_next), tArA) is equivalent to
+    // 教程：上面的 copy(copy_a, tAgA(_,_,_,k_tile_next), tArA) 等价于
     //   CUTE_UNROLL
     //   for (int k = 0; k < size<1>(tCsA); ++k) {
     //     CUTE_UNROLL
@@ -216,9 +216,9 @@ gemm_device(ProblemShape shape_MNK, CtaTiler cta_tiler,
     //     }
     //   }
 
-    // Compute gemm on mma-partitioned smem
+    // 在按 MMA 分区的 smem 上执行 GEMM
     gemm(mma, tCsA, tCsB, tCrC);
-    // TUTORIAL: The above call to gemm(tCsA, tCsB, tCrC) is equivalent to
+    // 教程：上面的 gemm(tCsA, tCsB, tCrC) 等价于
     //   CUTE_UNROLL
     //   for (int k = 0; k < size<1>(tCsA); ++k) {
     //     CUTE_UNROLL
@@ -234,13 +234,13 @@ gemm_device(ProblemShape shape_MNK, CtaTiler cta_tiler,
 #endif
 
   //
-  // Epilogue
+  // Epilogue：将 accumulator 写回 C
   //
 
   axpby(alpha, tCrC, beta, tCgC);
 }
 
-// Setup params for a NT GEMM
+// 设置 NT GEMM 参数
 template <class TA, class TB, class TC,
           class Alpha, class Beta>
 void
@@ -254,46 +254,46 @@ gemm_nt(int m, int n, int k,
 {
   using namespace cute;
 
-  // Define shapes (dynamic)
+  // 定义动态 Shape
   auto M = int(m);
   auto N = int(n);
   auto K = int(k);
   auto prob_shape = make_shape(M, N, K);                     // (M, N, K)
 
-  // Define NT strides (mixed)
+  // 定义 NT 的混合静态/动态 Stride
   auto dA = make_stride(Int<1>{}, ldA);                      // (dM, dK)
   auto dB = make_stride(Int<1>{}, ldB);                      // (dN, dK)
   auto dC = make_stride(Int<1>{}, ldC);                      // (dM, dN)
 
-  // Define CTA tile sizes (static)
+  // 定义静态 CTA tile 大小
   auto bM = Int<128>{};
   auto bN = Int<128>{};
   auto bK = Int<  8>{};
   auto cta_tiler = make_shape(bM, bN, bK);                   // (BLK_M, BLK_N, BLK_K)
 
-  // Define the smem layouts (static)
-  auto sA = make_layout(make_shape(bM, bK));                 // (m,k) -> smem_idx; m-major
-  auto sB = make_layout(make_shape(bN, bK));                 // (n,k) -> smem_idx; n-major
-  auto sC = make_layout(make_shape(bM, bN));                 // (m,n) -> smem_idx; m-major
+  // 定义静态 shared-memory Layout
+  auto sA = make_layout(make_shape(bM, bK));                 // (m,k) -> smem 下标; M-major
+  auto sB = make_layout(make_shape(bN, bK));                 // (n,k) -> smem 下标; N-major
+  auto sC = make_layout(make_shape(bM, bN));                 // (m,n) -> smem 下标; M-major
 
-  // Define the thread layouts (static)
+  // 定义静态线程 Layout
 
-  // TUTORIAL: Construct TiledCopy with a particular Copy_Atom to use and
-  //           define the partitioning pattern to apply.
-  // Each thread will (try to) copy 4x1 elements of type TA using 128-bit copy.
-  // Use 32x8 of these threads.
+  // 教程：使用指定 Copy_Atom 构造 TiledCopy，并
+  //           定义要应用的分区模式
+  // 每个线程尝试通过 128-bit copy 搬运 4x1 个 TA 元素
+  // 使用 32x8 个这样的线程
 
   TiledCopy copyA = make_tiled_copy(Copy_Atom<UniversalCopy<uint128_t>, TA>{},
-                                    Layout<Shape<_32,_8>>{},  // Thr layout 32x8 m-major
-                                    Layout<Shape< _4,_1>>{}); // Val layout  4x1 m-major
+                                    Layout<Shape<_32,_8>>{},  // 线程 Layout 32x8 M-major
+                                    Layout<Shape< _4,_1>>{}); // Value Layout  4x1 M-major
   TiledCopy copyB = make_tiled_copy(Copy_Atom<UniversalCopy<uint128_t>, TB>{},
-                                    Layout<Shape<_32,_8>>{},  // Thr layout 32x8 n-major
-                                    Layout<Shape< _4,_1>>{}); // Val layout  4x1 n-major
+                                    Layout<Shape<_32,_8>>{},  // 线程 Layout 32x8 N-major
+                                    Layout<Shape< _4,_1>>{}); // Value Layout  4x1 N-major
 
-  // TUTORIAL: Construct TiledMMA with a particular MMA_Atom to use and
-  //           define the partitioning pattern to apply.
-  // Use a 1x1x1 FMA on the types TC += TA * TB. Each atom requires a single thread.
-  // Reproduce that atom 16x16x1 times (m-major) across threads so that we use 256 threads.
+  // 教程：使用指定 MMA_Atom 构造 TiledMMA，并
+  //           定义要应用的分区模式
+  // 使用 1x1x1 FMA 执行 TC += TA * TB；每个 Atom 需要一个线程
+  // 按 M-major 在线程上复制该 Atom 16x16x1 次，共使用 256 个线程
 
   TiledMMA mmaC = make_tiled_mma(UniversalFMA<TC,TA,TB>{},
                                  Layout<Shape<_16,_16,_1>>{});  // 16x16x1 UniversalFMA
@@ -321,7 +321,7 @@ gemm_nt(int m, int n, int k,
        alpha, beta);
 }
 
-// Setup params for a TN GEMM
+// 设置 TN GEMM 参数
 template <class TA, class TB, class TC,
           class Alpha, class Beta>
 void
@@ -335,46 +335,46 @@ gemm_tn(int m, int n, int k,
 {
   using namespace cute;
 
-  // Define shapes (dynamic)
+  // 定义动态 Shape
   auto M = int(m);
   auto N = int(n);
   auto K = int(k);
   auto prob_shape = make_shape(M, N, K);                     // (M, N, K)
 
-  // Define TN strides (mixed)
+  // 定义 TN 的混合静态/动态 Stride
   auto dA = make_stride(ldA, Int<1>{});                      // (dM, dK)
   auto dB = make_stride(ldB, Int<1>{});                      // (dN, dK)
   auto dC = make_stride(Int<1>{}, ldC);                      // (dM, dN)
 
-  // Define CTA tile sizes (static)
+  // 定义静态 CTA tile 大小
   auto bM = Int<128>{};
   auto bN = Int<128>{};
   auto bK = Int<  8>{};
   auto cta_tiler = make_shape(bM, bN, bK);                   // (BLK_M, BLK_N, BLK_K)
 
-  // Define the smem layouts (static)
+  // 定义静态 shared-memory Layout
   auto sA = make_layout(make_shape (      bM,          bK),
-                        make_stride(Int<1>{}, bM+Int<1>{}));        // (m,k) -> smem_idx; padded m-major
+                        make_stride(Int<1>{}, bM+Int<1>{}));        // (m,k) -> smem 下标; 带 padding 的 M-major
   auto sB = make_layout(make_shape (      bN,          bK),
-                        make_stride(Int<1>{}, bN+Int<1>{}));        // (n,k) -> smem_idx; padded n-major
-  auto sC = make_layout(make_shape(bM, bN));                        // (m,n) -> smem_idx
+                        make_stride(Int<1>{}, bN+Int<1>{}));        // (n,k) -> smem 下标; 带 padding 的 N-major
+  auto sC = make_layout(make_shape(bM, bN));                        // (m,n) -> smem 下标
 
-  // TUTORIAL: Construct TiledCopy to define the Copy_Atom to use and the
-  //           partitioning pattern to apply.
-  // Each thread will copy 1x1 elements of type TA.
-  // Use 32x8 of these threads arranged in k-major.
+  // 教程：构造 TiledCopy，定义所用 Copy_Atom 以及
+  //           要应用的分区模式
+  // 每个线程搬运 1x1 个 TA 元素
+  // 使用按 K-major 排列的 32x8 个线程
 
   TiledCopy copyA = make_tiled_copy(Copy_Atom<UniversalCopy<TA>, TA>{},
-                                    Layout<Shape<_32,_8>,Stride<_8,_1>>{}, // Thr layout 32x8 k-major
-                                    Layout<Shape< _1,_1>>{});              // Val layout  1x1
+                                    Layout<Shape<_32,_8>,Stride<_8,_1>>{}, // 线程 Layout 32x8 K-major
+                                    Layout<Shape< _1,_1>>{});              // Value Layout  1x1
   TiledCopy copyB = make_tiled_copy(Copy_Atom<UniversalCopy<TB>, TB>{},
-                                    Layout<Shape<_32,_8>,Stride<_8,_1>>{}, // Thr layout 32x8 k-major
-                                    Layout<Shape< _1,_1>>{});              // Val layout  1x1
+                                    Layout<Shape<_32,_8>,Stride<_8,_1>>{}, // 线程 Layout 32x8 K-major
+                                    Layout<Shape< _1,_1>>{});              // Value Layout  1x1
 
-  // TUTORIAL: Construct TiledMMA to define the MMA_Atom to use and the
-  //           partitioning pattern to apply.
-  // Use a 1x1x1 FMA on the types TC += TA * TB. Each atom requires a single thread.
-  // Reproduce that atom 16x16x1 times (m-major) across threads so that we use 256 threads.
+  // 教程：构造 TiledMMA，定义所用 MMA_Atom 以及
+  //           要应用的分区模式
+  // 使用 1x1x1 FMA 执行 TC += TA * TB；每个 Atom 需要一个线程
+  // 按 M-major 在线程上复制该 Atom 16x16x1 次，共使用 256 个线程
 
   TiledMMA mmaC = make_tiled_mma(UniversalFMA<TC,TA,TB>{},
                                  Layout<Shape<_16,_16,_1>>{});  // 16x16x1 TiledMMA
@@ -495,7 +495,7 @@ int main(int argc, char** argv)
     assert(false);
   }
 
-  // Run once
+  // 先运行一次
   d_C = h_C;
   gemm(transA, transB, m, n, k,
        alpha,
@@ -513,7 +513,7 @@ int main(int argc, char** argv)
     return -1;
   }
 
-  // Timing iterations
+  // 性能计时迭代
   timer.start();
   for (int i = 0; i < timing_iterations; ++i) {
     gemm(transA, transB, m, n, k,
