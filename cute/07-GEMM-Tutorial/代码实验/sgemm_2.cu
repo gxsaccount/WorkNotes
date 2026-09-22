@@ -107,18 +107,57 @@ gemm_device(ProblemShape shape_MNK, CtaTiler cta_tiler,
   // 将 A、B tile 的搬运任务划分到各线程
   //
 
-  // 教程：使用 TiledCopy 进行分区
+  // 教程：使用 TiledCopy 进行分区。
+  // copy_a/copy_b 由 Host 端构造并传入，内部包含：
+  //   1. Copy Atom：一次 copy 使用什么指令、处理多少个 value；
+  //   2. Thread Layout：线程怎样分布在 copy tile 上；
+  //   3. Value Layout：每线程的一条 Copy Atom 负责哪些 value。
+  //
+  // gemm_device 是泛型 kernel，本身没有固定使用 128-bit copy。
+  // gemm_nt 与 gemm_tn 会传入不同类型的 copyA/copyB，编译器据此生成两个
+  // 不同的 gemm_device 模板实例：
+  //
+  //   NT 路径：
+  //     copy_a/copy_b = 128-bit UniversalCopy
+  //     Thread Layout = 32x8，Value Layout = 4x1
+  //     A 的 M mode、B 的 N mode 都是 stride=1；同一线程取得的 4 个 value
+  //     在 global memory 中连续，因此可以组合成一次 128-bit load。
+  //     gA/gB tile = 128x8，因此每线程结果为：
+  //       tAgA/tBgB = (CPY=4, CPY_M/N=1, CPY_K=1, k)
+  //       tAsA/tBsB = (CPY=4, CPY_M/N=1, CPY_K=1)
+  //
+  //   TN 路径：
+  //     copy_a/copy_b = 标量 UniversalCopy<T>
+  //     Thread Layout = 32x8 K-major，Value Layout = 1x1
+  //     A/B 的 K mode 虽然连续，但当前 Thread Layout 已把连续 K 坐标分给
+  //     不同线程；同一线程在 M/N 方向重复取得的 4 个 value 相隔 ldA/ldB，
+  //     不能直接套用 NT 的 4x1 uint128_t vector load。
+  //     gA/gB tile = 128x8，Thread Layout 会在 M/N 方向重复 4 次：
+  //       tAgA/tBgB = (CPY=1, CPY_M/N=4, CPY_K=1, k)
+  //       tAsA/tBsB = (CPY=1, CPY_M/N=4, CPY_K=1)
+  //     TN 并非永远不能使用 128-bit copy；若重新设计为同一线程沿 K 取得
+  //     连续 value，并同时调整线程布局、目标布局和对齐约束，也可以向量化。
+  //
+  // Host 端变量名是 copyA/copyB，传入 kernel 后对应形参 copy_a/copy_b。
 
+  // 从完整 TiledCopy 中取出 threadIdx.x 对应的每线程 copy 对象。
   ThrCopy thr_copy_a = copy_a.get_slice(threadIdx.x);
+  // partition_S：按 Copy Atom 的 Source TV Layout 划分源 Tensor，
+  // 得到当前线程应从 global A 的哪些位置读取；这里只创建 nonowning view。
   Tensor tAgA = thr_copy_a.partition_S(gA);                            // (CPY,CPY_M,CPY_K,k)
+  // partition_D：按 Copy Atom 的 Destination TV Layout 划分目标 Tensor，
+  // 得到当前线程应向 shared A 的哪些位置写入；这里只创建 nonowning view。
+  // 普通 UniversalCopy 的 S/D 映射通常相同，但硬件 Copy Atom 可能不同。
   Tensor tAsA = thr_copy_a.partition_D(sA);                            // (CPY,CPY_M,CPY_K)
-  // 分配与分区数据 Shape/Layout 相同的寄存器
+  // 分配与目标分区 Shape/Layout 相同的 owning register Tensor。
+  // 后续先执行 global → register，再执行 register → shared。
   Tensor tArA = make_fragment_like(tAsA);                              // (CPY,CPY_M,CPY_K)
 
   ThrCopy thr_copy_b = copy_b.get_slice(threadIdx.x);
+  // B 使用相同流程：partition_S 决定从哪里读，partition_D 决定向哪里写。
   Tensor tBgB = thr_copy_b.partition_S(gB);                            // (CPY,CPY_N,CPY_K,k)
   Tensor tBsB = thr_copy_b.partition_D(sB);                            // (CPY,CPY_N,CPY_K)
-  // 分配与分区数据 Shape/Layout 相同的寄存器
+  // 分配 B 的 owning register staging Tensor。
   Tensor tBrB = make_fragment_like(tBsB);                              // (CPY,CPY_N,CPY_K)
 
   CUTE_STATIC_ASSERT_V(size<1>(tAgA) == size<1>(tAsA));                // CPY_M
@@ -137,14 +176,38 @@ gemm_device(ProblemShape shape_MNK, CtaTiler cta_tiler,
   // 定义 A/B 的计算分区与 C accumulator
   //
 
-  // 教程：使用 TiledMMA 进行分区
+  // 教程：使用 TiledMMA 进行计算分区。
+  // mma 由 Host 端构造并传入，内部包含：
+  //   1. MMA Atom：使用什么乘加指令，以及单个 Atom 的 A/B/C TV Layout；
+  //   2. Atom Thread Layout：多少个 Atom 怎样铺到 M/N/K 和线程上；
+  //   3. 可选的 MNK tile/permutation：最终逻辑 tile 的大小和坐标顺序。
+  //
+  // 当前 sgemm_2 的 NT/TN 路径都传入：
+  //   MMA Atom = UniversalFMA<TC,TA,TB>，Shape_MNK=1x1x1，每个 Atom 使用 1 个线程；
+  //   Atom Thread Layout = 16x16x1，共 256 个线程；
+  //   自然 TiledMMA tile = 16x16x1。
+  //
+  // 当前 CTA tile 为 128x128x8，因此 16x16x1 的线程/Atom 模式会在 value
+  // 方向重复，得到每线程的具体分区：
+  //   tCsA = (MMA=1, MMA_M=128/16=8, MMA_K=8/1=8)
+  //   tCsB = (MMA=1, MMA_N=128/16=8, MMA_K=8/1=8)
+  //   tCgC = (MMA=1, MMA_M=128/16=8, MMA_N=128/16=8)
+  //
+  // 与 copy_a 类似，gemm_device 是泛型 kernel；如果 Host 改传 Tensor Core
+  // TiledMMA，MMA mode 大小、每线程 fragment 和 lane 映射会随类型一起改变。
 
+  // 从完整 TiledMMA 中取出 threadIdx.x 对应的每线程计算对象。
   ThrMMA thr_mma = mma.get_slice(threadIdx.x);
+  // partition_A：按 MMA 的 A TV Layout，从 shared A 得到当前线程所需的 A view。
   Tensor tCsA = thr_mma.partition_A(sA);                               // (MMA,MMA_M,MMA_K)
+  // partition_B：按 MMA 的 B TV Layout，从 shared B 得到当前线程所需的 B view。
   Tensor tCsB = thr_mma.partition_B(sB);                               // (MMA,MMA_N,MMA_K)
+  // partition_C：按 MMA 的 C TV Layout，从 global C 得到当前线程负责的 C view。
+  // 上述 partition 都只创建 nonowning view，不会搬运数据或执行乘加。
   Tensor tCgC = thr_mma.partition_C(gC);                               // (MMA,MMA_M,MMA_N)
 
-  // 分配 accumulator，其大小与投影后的数据相同
+  // 创建符合 MMA accumulator 类型与 Layout 要求的 owning register Tensor。
+  // 当前 UniversalFMA 配置下实际 Shape 为 (1,8,8)，共 64 个 accumulator。
   Tensor tCrC = thr_mma.make_fragment_C(tCgC);                         // (MMA,MMA_M,MMA_N)
 
   CUTE_STATIC_ASSERT_V(  shape(tCrC) ==   shape(tCgC));                // (MMA,MMA_M,MMA_N)
@@ -203,7 +266,20 @@ gemm_device(ProblemShape shape_MNK, CtaTiler cta_tiler,
     __syncthreads();         // 等待所有线程使用完当前 smem 数据
     copy(tArA, tAsA);
     copy(tBrB, tBsB);
-    __syncthreads();         // 等待所有线程使用完当前 smem 数据
+    __syncthreads();         // 等待所有线程完成新一轮 smem 写入
+
+    // 本版本没有 cp_async_fence/wait：
+    //   copy_a 执行普通 gmem → rmem load；
+    //   上面的 copy 执行普通 rmem → smem store。
+    // 两步都没有创建 cp.async transaction group，因此无需 commit/wait。
+    // __syncthreads() 仍然必须保留，用于协调 CTA 内所有线程对 smem 的读写。
+    //
+    // 简单理解普通 load 的“预取”：
+    //   发出 LDG 后，数据可能仍在内存系统中传输；
+    //   只有后续指令与 tArA/tBrB 没有数据依赖，才有机会继续执行；
+    //   当前 GEMM 只读取 sA/sB 并更新 tCrC，不读取 tArA/tBrB，所以满足条件；
+    //   下一轮真正读取 tArA/tBrB 时，若数据还没到，scoreboard 才会让线程等待。
+    // 这只是为延迟重叠创造机会，不是 cp.async，也不保证一定完全隐藏延迟。
 
     // 使用按 tA/tB 分区的 Tensor 预取下一 k_tile：gmem → rmem
     int k_tile_next = (k_tile + 1 < K_TILE_MAX) ? k_tile + 1 : k_tile;
@@ -281,22 +357,41 @@ gemm_nt(int m, int n, int k,
 
   // 定义静态线程 Layout
 
-  // 教程：使用指定 Copy_Atom 构造 TiledCopy，并
-  //           定义要应用的分区模式
-  // 每个线程尝试通过 128-bit copy 搬运 4x1 个 TA 元素
-  // 使用 32x8 个这样的线程
+  // 教程：使用指定 Copy_Atom 构造 TiledCopy，并定义分区模式。
+  //
+  // copyA/copyB 的三部分：
+  //   Copy_Atom<UniversalCopy<uint128_t>, T>：
+  //     将 4 个 32-bit float 组合为一次 128-bit global → register copy。
+  //   Thread Layout 32x8：
+  //     共 256 个线程位置，分别铺在 M/N 与 K 方向。
+  //   Value Layout 4x1：
+  //     每线程的一条 Copy Atom 在 M/N 方向搬 4 个 value，K 方向搬 1 个。
+  //
+  // 对 128x8 的 A/B tile：
+  //   M/N 覆盖 = 32 threads * 4 values = 128
+  //   K 覆盖   =  8 threads * 1 value  = 8
+  // 因此每个线程每个 K tile 负责 4x1 个元素；这是一种设计选择，并非唯一布局。
+  //
+  // 为什么这里能用 128-bit：
+  //   A(M,K):(1,ldA) 的 M mode 连续，4x1 的四个 A value 地址连续；
+  //   B(N,K):(1,ldB) 的 N mode 连续，4x1 的四个 B value 地址连续。
+  // 因而同一线程可以将四个 float 合并成一个 uint128_t load。
 
   TiledCopy copyA = make_tiled_copy(Copy_Atom<UniversalCopy<uint128_t>, TA>{},
                                     Layout<Shape<_32,_8>>{},  // 线程 Layout 32x8 M-major
-                                    Layout<Shape< _4,_1>>{}); // Value Layout  4x1 M-major
+                                    Layout<Shape< _4,_1>>{}); // 值 Layout 4x1 M-major
   TiledCopy copyB = make_tiled_copy(Copy_Atom<UniversalCopy<uint128_t>, TB>{},
                                     Layout<Shape<_32,_8>>{},  // 线程 Layout 32x8 N-major
-                                    Layout<Shape< _4,_1>>{}); // Value Layout  4x1 N-major
+                                    Layout<Shape< _4,_1>>{}); // 值 Layout 4x1 N-major
 
-  // 教程：使用指定 MMA_Atom 构造 TiledMMA，并
-  //           定义要应用的分区模式
-  // 使用 1x1x1 FMA 执行 TC += TA * TB；每个 Atom 需要一个线程
-  // 按 M-major 在线程上复制该 Atom 16x16x1 次，共使用 256 个线程
+  // mmaC 的三部分：
+  //   UniversalFMA<TC,TA,TB>：
+  //     1x1x1 标量 FMA Atom，当前 float 实例最终生成普通 FFMA，不使用 Tensor Core。
+  //   Atom Thread Layout 16x16x1：
+  //     沿 M/N 各放置 16 个单线程 Atom，共使用 16*16=256 个线程。
+  //   未显式传入第三个 MNK tiler：
+  //     使用自然 16x16x1 TiledMMA tile；分区 128x128x8 CTA tile 时，
+  //     多出的 M/N/K 范围成为每线程的 MMA_M/MMA_N/MMA_K value mode。
 
   TiledMMA mmaC = make_tiled_mma(UniversalFMA<TC,TA,TB>{},
                                  Layout<Shape<_16,_16,_1>>{});  // 16x16x1 UniversalFMA
@@ -363,22 +458,31 @@ gemm_tn(int m, int n, int k,
                         make_stride(Int<1>{}, bN+Int<1>{}));        // (n,k) -> smem 下标; 带 padding 的 N-major
   auto sC = make_layout(make_shape(bM, bN));                        // (m,n) -> smem 下标
 
-  // 教程：构造 TiledCopy，定义所用 Copy_Atom 以及
-  //           要应用的分区模式
-  // 每个线程搬运 1x1 个 TA 元素
-  // 使用按 K-major 排列的 32x8 个线程
+  // 教程：TN 路径同样使用 TiledCopy，但当前示例选择标量 UniversalCopy<T>。
+  // Thread Layout 仍为 32x8，不过使用 K-major 排列来匹配 K 连续的 global 数据。
+  // Value Layout 为 1x1，所以每条 Copy Atom 只搬一个元素；这是示例配置，
+  // 可以替换为满足对齐、Layout 和指令约束的其他 Copy Atom/分区。
+  //
+  // 为什么当前配置没有直接使用 NT 的 128-bit 4x1 copy：
+  //   A(M,K):(ldA,1)、B(N,K):(ldB,1) 的 M/N mode 不连续；
+  //   同一线程沿 M/N 重复负责的四个元素相隔 ldA/ldB，无法组成一次连续
+  //   uint128_t load。连续的 K 元素又已经被当前 32x8 K-major Thread Layout
+  //   分给不同线程，因此本示例使用每线程 1x1 的标量 copy。
+  // 若改成让同一线程持有连续的 1x4 K values，并重新设计 Thread Layout、
+  // shared-memory destination 映射与对齐条件，TN 也可以实现向量化 copy。
 
   TiledCopy copyA = make_tiled_copy(Copy_Atom<UniversalCopy<TA>, TA>{},
                                     Layout<Shape<_32,_8>,Stride<_8,_1>>{}, // 线程 Layout 32x8 K-major
-                                    Layout<Shape< _1,_1>>{});              // Value Layout  1x1
+                                    Layout<Shape< _1,_1>>{});              // 值 Layout 1x1
   TiledCopy copyB = make_tiled_copy(Copy_Atom<UniversalCopy<TB>, TB>{},
                                     Layout<Shape<_32,_8>,Stride<_8,_1>>{}, // 线程 Layout 32x8 K-major
-                                    Layout<Shape< _1,_1>>{});              // Value Layout  1x1
+                                    Layout<Shape< _1,_1>>{});              // 值 Layout 1x1
 
-  // 教程：构造 TiledMMA，定义所用 MMA_Atom 以及
-  //           要应用的分区模式
-  // 使用 1x1x1 FMA 执行 TC += TA * TB；每个 Atom 需要一个线程
-  // 按 M-major 在线程上复制该 Atom 16x16x1 次，共使用 256 个线程
+  // TN 路径使用与 NT 相同的 TiledMMA：
+  //   UniversalFMA 是 1x1x1 单线程标量 FMA；
+  //   16x16x1 Atom Thread Layout 共使用 256 个线程；
+  //   对 128x128x8 CTA tile，每线程最终得到 A(1,8,8)、B(1,8,8)、
+  //   C accumulator(1,8,8)。NT/TN 的差异主要在存储与 copy，而非计算分区。
 
   TiledMMA mmaC = make_tiled_mma(UniversalFMA<TC,TA,TB>{},
                                  Layout<Shape<_16,_16,_1>>{});  // 16x16x1 TiledMMA

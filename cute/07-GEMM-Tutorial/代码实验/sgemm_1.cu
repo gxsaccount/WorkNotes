@@ -212,8 +212,12 @@ gemm_device(ProblemShape shape_MNK, CtaTiler cta_tiler,
     //     tAsA(i) = tAgAk(i);
     //   }
 
-    cp_async_fence();        // 标记当前一组潜在 cp.async 指令的结束
-    cp_async_wait<0>();      // 等待此前所有潜在 cp.async 指令完成
+    // 当前实例的 copy(src,dst) 使用普通 LDG+STS（非 cp.async），没有实际发出
+    // cp.async，因此下面的 fence/wait 没有待提交或等待的异步事务，并非当前
+    // 正确性所必需。官方教程保留它们，是为了标出未来将 copy 替换成潜在
+    // cp.async 实现时，commit/wait 应该放置的位置。
+    cp_async_fence();        // 异步 copy 时：提交当前 cp.async group
+    cp_async_wait<0>();      // 异步 copy 时：等待此前全部 group 完成
     __syncthreads();         // 等待所有线程完成 smem 写入
 
     // 在按 tC 分区的 shared-memory Tensor 上执行 GEMM

@@ -2,7 +2,7 @@
 
 > 官方示例：`sgemm_1.cu` 与 `sgemm_2.cu`
 >
-> 更新：2026-09-21
+> 更新：2026-09-22
 
 CTA 已经通过 `local_tile` 得到：
 
@@ -302,7 +302,133 @@ shared 正在被 GEMM 消费当前 tile
 register 预取下一 tile 的 global 数据
 ```
 
-## 9. Copy 数据流不要混淆
+### 普通 load 为什么也能称为“预取”
+
+这里不要把“普通 load”理解成阻塞式函数调用。简单记忆：
+
+> **后续计算必须与 load 的目标寄存器没有数据依赖，才可能与 load 重叠。**
+
+```text
+发出 LDG：
+  内存请求开始，结果未来写入 tArA/tBrB
+
+执行当前 GEMM：
+  只读取 sA/sB 并更新 tCrC
+  不读取 tArA/tBrB，所以没有数据依赖，可能继续执行
+
+下一轮使用 tArA/tBrB：
+  若 load 尚未完成，scoreboard 才在这里等待
+```
+
+如果紧接着执行依赖预取结果的指令：
+
+```cpp
+copy(copy_a, next_gA, tArA);
+consume(tArA); // 立即读取 tArA
+```
+
+那么 `consume` 会因 RAW（Read After Write）数据依赖等待 LDG 完成，无法用中间
+计算隐藏这次 load 延迟。
+
+因此：
+
+```text
+普通 LDG：
+  没有显式 commit/wait
+  依赖由硬件 scoreboard 自动跟踪
+
+cp.async：
+  有独立异步 transaction group
+  需要显式 commit/wait
+```
+
+`sgemm_2` 把下一 tile 提前读入寄存器，只是为 global-load 延迟与当前 GEMM
+重叠创造机会；实际重叠程度仍取决于编译器调度和硬件执行。
+
+### 为什么 `sgemm_2` 没有 `cp_async_fence/wait`
+
+`sgemm_2` 的两级搬运是：
+
+```text
+global → register：UniversalCopy，普通 load（非 cp.async）
+register → shared：普通 store（非 cp.async）
+```
+
+它们都没有创建 `cp.async` transaction group，因此不需要：
+
+```cpp
+cp_async_fence();
+cp_async_wait<0>();
+```
+
+但 shared memory 仍由整个 CTA 共享，所以必须使用：
+
+```cpp
+__syncthreads(); // 所有线程读完上一轮 smem，才能覆盖
+copy(rmem, smem);
+__syncthreads(); // 所有线程写完新 smem，才能开始 GEMM
+```
+
+真正使用 `cp.async` 的是后续 `sgemm_sm80.cu`，那里才需要对应的
+commit/wait 协议。
+
+## 9. 为什么 NT 使用 128-bit，TN 使用标量 Copy
+
+`gemm_device` 是泛型 kernel，`copy_a/copy_b` 的实际类型由 Host 端传入。
+因此 NT 与 TN 会实例化出不同的 kernel，而不是在同一个 kernel 中运行时切换
+copy 宽度。
+
+### NT
+
+```text
+A(M,K):(1,ldA) → M 连续
+B(N,K):(1,ldB) → N 连续
+```
+
+其 Value Layout 为：
+
+```text
+4×1
+```
+
+同一线程取得的四个 M/N values 在内存中连续：
+
+```text
+4 float × 32 bit = 128 bit
+```
+
+所以可以使用：
+
+```cpp
+Copy_Atom<UniversalCopy<uint128_t>, T>
+```
+
+### TN
+
+```text
+A(M,K):(ldA,1) → K 连续
+B(N,K):(ldB,1) → K 连续
+```
+
+但当前 `32×8` K-major Thread Layout 已将相邻 K 坐标分配给不同线程。单个线程
+沿 M/N 重复负责的四个元素相隔 `ldA/ldB`：
+
+```text
+A(m,k), A(m+32,k), A(m+64,k), A(m+96,k)
+```
+
+这些地址不连续，不能直接复用 NT 的 `4×1 uint128_t` load。因此当前示例选择：
+
+```cpp
+Copy_Atom<UniversalCopy<T>, T>
+Value Layout = 1×1
+```
+
+TN 并非天然不能使用 128-bit copy。若改成同一线程沿 K 持有连续的 `1×4`
+values，并同步调整 Thread Layout、shared-memory destination Layout 和对齐
+条件，也可以设计向量化 copy。
+
+## 10. Copy 数据流不要混淆
 
 ```text
 gA/tAgA：global-memory view
@@ -322,7 +448,7 @@ copy(tArA, tAsA)
 
 `partition_S/D` 只决定访问位置，`copy` 才真正移动数据。
 
-## 10. 同步责任
+## 11. 同步责任
 
 shared memory 是 CTA 内共享的：
 

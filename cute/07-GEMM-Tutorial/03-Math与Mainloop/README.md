@@ -205,6 +205,32 @@ for (int k_tile = 0;
 5. 确认所有线程读完，再覆盖 shared memory
 ```
 
+当前 `sgemm_1` 实例中的：
+
+```cpp
+copy(tAgA(_,_,k_tile), tAsA);
+copy(tBgB(_,_,k_tile), tBsB);
+```
+
+实际使用普通 `LDG + STS`（非 `cp.async`），没有创建异步 transaction group。
+因此：
+
+```cpp
+cp_async_fence();
+cp_async_wait<0>();
+```
+
+在当前实例中没有待提交或等待的异步事务，并不是保证正确性所必需的。官方教程
+保留它们，是为了明确将来把 `copy` 替换成异步实现时 commit/wait 的位置。
+
+当前实例真正需要的是：
+
+```cpp
+__syncthreads();
+```
+
+它保证 CTA 内所有线程完成 shared-memory 写入后再开始计算。
+
 ## 6. `gemm(tCsA,tCsB,tCrC)` 展开
 
 这里调用的是 CuTe 算法：
