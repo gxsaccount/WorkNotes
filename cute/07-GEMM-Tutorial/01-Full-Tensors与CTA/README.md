@@ -123,6 +123,77 @@ B 的 N/K 哪个连续？
 
 比单独看 N/T 标志更直接。
 
+### 哪部分描述输入矩阵的物理存储
+
+输入矩阵的物理存储方式不是由 `gemm_nt` 或 `gemm_tn` 这个函数名直接决定的，
+而是由：
+
+```text
+数据指针 + Shape + Stride
+```
+
+共同决定。
+
+例如：
+
+```cpp
+Tensor mA =
+    make_tensor(
+        make_gmem_ptr(A),
+        select<0,2>(problem_shape),
+        dA);
+```
+
+其中：
+
+```text
+A 指针：数据从哪块 global memory 开始
+Shape：  逻辑上把它看成 (M,K)
+dA：     (m,k) 怎样映射到实际内存 offset
+```
+
+真正决定连续方向的是 `dA/dB`：
+
+```cpp
+// NT
+dA = (1,ldA); // A 的 M mode 连续
+dB = (1,ldB); // B 的 N mode 连续
+
+// TN
+dA = (ldA,1); // A 的 K mode 连续
+dB = (ldB,1); // B 的 K mode 连续
+```
+
+对应地址公式：
+
+```text
+NT：
+A_offset(m,k) = m + k*ldA
+B_offset(n,k) = n + k*ldB
+
+TN：
+A_offset(m,k) = m*ldA + k
+B_offset(n,k) = n*ldB + k
+```
+
+因此 `gemm_nt/gemm_tn` 的作用是准备不同配置：
+
+```text
+global-memory Stride
+shared-memory Layout
+copy Thread Layout
+```
+
+它们不会物理转置 A/B，也不会重新排列输入数组。
+
+还要区分：
+
+```text
+dA/dB：描述输入 global-memory 数据的物理存储
+sA/sB：描述 shared-memory tile 的物理存储
+tA/tB：描述线程如何参与 copy，不是矩阵存储格式
+```
+
 ## 4. CTA Tiler
 
 官方基础示例选择：

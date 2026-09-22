@@ -91,6 +91,41 @@ tC(M,N)
  └─ 保留 M、N      → partition C(M,N)
 ```
 
+这里的 `X` 容易误解：
+
+```text
+Step<_1,X>：
+  M 线程坐标参与 A 的分区
+  N 线程坐标不参与
+
+Step<X,_1>：
+  M 线程坐标不参与 B 的分区
+  N 线程坐标参与
+```
+
+`X` 表示忽略该线程 mode，**不是把该 mode 的坐标或 Shape 设为 1**。
+`_1` 表示保留该 mode，并使用单位步长。
+
+因此对于 B：
+
+```text
+(thread_m,thread_n)
+        ↓ Step<X,_1>
+     thread_n
+```
+
+M 不同但 N 相同的线程会得到相同的 `tCsB` view，因为：
+
+```text
+C(m,n) += Σk A(m,k) * B(n,k)
+```
+
+`B(n,k)` 与 `m` 无关。与此同时，B 自身的 K mode 没有被删除，结果仍为：
+
+```text
+tCsB: (THR_N,BLK_K)
+```
+
 ## 3. Accumulator
 
 ```cpp

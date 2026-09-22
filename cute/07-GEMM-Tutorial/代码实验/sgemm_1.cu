@@ -106,7 +106,9 @@ gemm_device(ProblemShape shape_MNK, CtaTiler cta_tiler,
   Tensor gB = local_tile(mB, cta_tiler, cta_coord, Step< X,_1,_1>{});  // (BLK_N,BLK_K,k)
   Tensor gC = local_tile(mC, cta_tiler, cta_coord, Step<_1,_1, X>{});  // (BLK_M,BLK_N)
 
-  // Shared memory 缓冲区
+  // 共享内存缓冲区。
+  // cosize_v<Layout> 会在编译期计算覆盖 Layout 所有物理 offset 所需的数组容量，
+  // 因此即使 Layout 含有 padding 或空洞也不会越界；容量单位是元素而不是字节。
   __shared__ TA smemA[cosize_v<ASmemLayout>];
   __shared__ TB smemB[cosize_v<BSmemLayout>];
   Tensor sA = make_tensor(make_smem_ptr(smemA), sA_layout);            // (BLK_M,BLK_K)
@@ -135,14 +137,17 @@ gemm_device(ProblemShape shape_MNK, CtaTiler cta_tiler,
 
   // 教程：通过投影线程 Layout tC 完成计算分区
 
-  // 使用 tC 的 M/行方向分区 sA (BLK_M, BLK_K)
+  // 使用 tC 的 M/行方向分区 sA (BLK_M, BLK_K)。
+  // Step<_1,X> 表示 M 线程坐标生效、N 线程坐标被忽略；X 不是把 N 设为 1。
   Tensor tCsA = local_partition(sA, tC, threadIdx.x, Step<_1, X>{});   // (THR_M,BLK_K)
-  // 使用 tC 的 N/列方向分区 sB (BLK_N, BLK_K)
+  // 使用 tC 的 N/列方向分区 sB (BLK_N, BLK_K)。
+  // Step<X,_1> 表示 N 线程坐标生效、M 线程坐标被忽略；X 不是把 M 设为 1。
+  // 因此 M 不同但 N 相同的线程会得到相同的 B view，B 的 K mode 仍完整保留。
   Tensor tCsB = local_partition(sB, tC, threadIdx.x, Step< X,_1>{});   // (THR_N,BLK_K)
   // 使用完整 tC tile 分区 gC (M,N)
   Tensor tCgC = local_partition(gC, tC, threadIdx.x, Step<_1,_1>{});   // (THR_M,THR_N)
 
-  // 分配 accumulator，其 Shape/Layout 与分区后的数据相同
+  // 分配 accumulator，其 Shape/Layout 与分区后的数据相同、make_tensor_like，因为没有传入指针，所以它创建自己的静态数组存储（寄存器）。
   Tensor tCrC = make_tensor_like(tCgC);                                // (THR_M,THR_N)
 
   CUTE_STATIC_ASSERT_V(size<0>(tCrC) == size<0>(tCgC));                // THR_M
@@ -192,7 +197,7 @@ gemm_device(ProblemShape shape_MNK, CtaTiler cta_tiler,
   //   copy(.) 通过 tA/tB 分区操作 global 与 shared memory
   //   gemm(.) 通过 tC 分区操作 shared 与 register memory
 
-  auto K_TILE_MAX = size<2>(tAgA);
+  auto K_TILE_MAX = size<2>(tAgA); // tAgA sahpe: (BLK_M,BLK_K,k)  ， k个（BLK_M,BLK_K）的快
 
   for (int k_tile = 0; k_tile < K_TILE_MAX; ++k_tile)
   {
@@ -215,7 +220,7 @@ gemm_device(ProblemShape shape_MNK, CtaTiler cta_tiler,
     // 这是 cute::gemm，并非 CUDA/C++ 内置函数
     // 三参数形式执行原地累加：tCrC += tCsA * tCsB
     // 此处未传入 MMA Atom，因此 CuTe 分派到默认 UniversalFMA
-    gemm(tCsA, tCsB, tCrC);            // (THR_M,THR_N) += (THR_M,BLK_K) * (THR_N,BLK_K)
+    gemm(tCsA, tCsB, tCrC);            // (THR_M,THR_N) += (THR_M,BLK_K) * (THR_N,BLK_K) =》 (8,8) += (8,8) * (8,8)
 
     // 教程：上面的 gemm(tCsA, tCsB, tCrC) 等价于
     //   CUTE_UNROLL
@@ -268,10 +273,13 @@ gemm_nt(int m, int n, int k,
   auto K = int(k);
   auto prob_shape = make_shape(M, N, K);                     // (M, N, K)
 
+  // A/B 指针本身只表示一维内存地址；dA/dB 才描述输入矩阵的物理存储方式。
+  // gemm_nt 不会真的转置矩阵，而是用下面的 Stride 将内存解释成 A(M,K)、B(N,K)。
   // 定义 NT 的混合静态/动态 Stride
-  auto dA = make_stride(Int<1>{}, ldA);                      // (dM, dK)
-  auto dB = make_stride(Int<1>{}, ldB);                      // (dN, dK)
-  auto dC = make_stride(Int<1>{}, ldC);                      // (dM, dN)
+  // 哪个 mode 的 stride 为 1，哪个 mode 就在物理内存中连续。
+  auto dA = make_stride(Int<1>{}, ldA);                      // (dM,dK)：M mode stride=1，M 连续（M-major）
+  auto dB = make_stride(Int<1>{}, ldB);                      // (dN,dK)：N mode stride=1，N 连续（N-major）
+  auto dC = make_stride(Int<1>{}, ldC);                      // (dM,dN)：M mode stride=1，M 连续（M-major）
 
   // 定义静态 CTA tile 大小
   auto bM = Int<128>{};
@@ -302,6 +310,8 @@ gemm_nt(int m, int n, int k,
 
 // 设置 TN GEMM 参数
 // 使用带 padding 的 M-major sA、N-major sB，以及 K-major 线程布局 tA/tB
+
+// C(128×128) += A(128×8) × B(128×8)
 template <class TA, class TB, class TC,
           class Alpha, class Beta>
 void
@@ -321,10 +331,13 @@ gemm_tn(int m, int n, int k,
   auto K = int(k);
   auto prob_shape = make_shape(M, N, K);                     // (M, N, K)
 
+  // A/B 指针本身只表示一维内存地址；dA/dB 才描述输入矩阵的物理存储方式。
+  // gemm_tn 不会真的转置矩阵，而是用下面的 Stride 将内存解释成 A(M,K)、B(N,K)。
   // 定义 TN 的混合静态/动态 Stride
-  auto dA = make_stride(ldA, Int<1>{});                      // (dM, dK)
-  auto dB = make_stride(ldB, Int<1>{});                      // (dN, dK)
-  auto dC = make_stride(Int<1>{}, ldC);                      // (dM, dN)
+  // 哪个 mode 的 stride 为 1，哪个 mode 就在物理内存中连续。
+  auto dA = make_stride(ldA, Int<1>{});                      // (dM,dK)：K mode stride=1，K 连续（K-major）
+  auto dB = make_stride(ldB, Int<1>{});                      // (dN,dK)：K mode stride=1，K 连续（K-major）
+  auto dC = make_stride(Int<1>{}, ldC);                      // (dM,dN)：M mode stride=1，M 连续（M-major）
 
   // 定义静态 CTA tile 大小
   auto bM = Int<128>{};
@@ -338,8 +351,16 @@ gemm_tn(int m, int n, int k,
   auto sC = make_layout(make_shape(bM, bN));                 // (m,n) -> smem 下标; M-major
 
   // 定义静态线程 Layout
+  // 这是一组便于教学的线程分工，并不是唯一选择；只要线程总数一致、各 mode
+  // 能整除 CTA tile，并且访存/计算映射合理，就可以设计其他 Thread Layout。
+  //
+  // tA/tB = 32x8：匹配 128x8 的 A/B copy tile。
+  // LayoutRight 让 K mode 在线程编号中连续，每线程负责 (128/32)x(8/8)=4x1 个元素。
   auto tA = make_layout(make_shape(Int<32>{}, Int< 8>{}), LayoutRight{});  // (m,k) -> 线程下标; K-major
   auto tB = make_layout(make_shape(Int<32>{}, Int< 8>{}), LayoutRight{});  // (n,k) -> 线程下标; K-major
+  //
+  // tC = 16x16：匹配 128x128 的 C tile，每线程负责
+  // (128/16)x(128/16)=8x8 个交错分布的 C accumulator。这个tile会需要gemm使用的atomic类型做调整
   auto tC = make_layout(make_shape(Int<16>{}, Int<16>{}));                 // (m,n) -> 线程下标; M-major
 
   dim3 dimBlock(size(tC));

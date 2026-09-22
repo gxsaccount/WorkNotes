@@ -343,9 +343,10 @@ gemm_tn(int m, int n, int k,
   auto prob_shape = make_shape(M, N, K);                     // (M, N, K)
 
   // 定义 TN 的混合静态/动态 Stride
-  auto dA = make_stride(ldA, Int<1>{});                      // (dM, dK)
-  auto dB = make_stride(ldB, Int<1>{});                      // (dN, dK)
-  auto dC = make_stride(Int<1>{}, ldC);                      // (dM, dN)
+  // 哪个 mode 的 stride 为 1，哪个 mode 就在物理内存中连续。
+  auto dA = make_stride(ldA, Int<1>{});                      // (dM,dK)：K mode stride=1，K 连续（K-major）
+  auto dB = make_stride(ldB, Int<1>{});                      // (dN,dK)：K mode stride=1，K 连续（K-major）
+  auto dC = make_stride(Int<1>{}, ldC);                      // (dM,dN)：M mode stride=1，M 连续（M-major）
 
   // 定义静态 CTA tile 大小
   auto bM = Int<128>{};
@@ -451,9 +452,10 @@ gemm_nt(int m, int n, int k,
   auto prob_shape = make_shape(M, N, K);                     // (M, N, K)
 
   // 定义 NT 的混合静态/动态 Stride
-  auto dA = make_stride(Int<1>{}, ldA);                      // (dM, dK)
-  auto dB = make_stride(Int<1>{}, ldB);                      // (dN, dK)
-  auto dC = make_stride(Int<1>{}, ldC);                      // (dM, dN)
+  // 哪个 mode 的 stride 为 1，哪个 mode 就在物理内存中连续。
+  auto dA = make_stride(Int<1>{}, ldA);                      // (dM,dK)：M mode stride=1，M 连续（M-major）
+  auto dB = make_stride(Int<1>{}, ldB);                      // (dN,dK)：N mode stride=1，N 连续（N-major）
+  auto dC = make_stride(Int<1>{}, ldC);                      // (dM,dN)：M mode stride=1，M 连续（M-major）
 
   // 定义静态 CTA tile 大小
   auto bM = Int<128>{};
@@ -524,9 +526,10 @@ gemm_tn(int m, int n, int k,
   auto prob_shape = make_shape(M, N, K);                     // (M, N, K)
 
   // 定义 TN 的混合静态/动态 Stride
-  auto dA = make_stride(ldA, Int<1>{});                      // (dM, dK)
-  auto dB = make_stride(ldB, Int<1>{});                      // (dN, dK)
-  auto dC = make_stride(Int<1>{}, ldC);                      // (dM, dN)
+  // 哪个 mode 的 stride 为 1，哪个 mode 就在物理内存中连续。
+  auto dA = make_stride(ldA, Int<1>{});                      // (dM,dK)：K mode stride=1，K 连续（K-major）
+  auto dB = make_stride(ldB, Int<1>{});                      // (dN,dK)：K mode stride=1，K 连续（K-major）
+  auto dC = make_stride(Int<1>{}, ldC);                      // (dM,dN)：M mode stride=1，M 连续（M-major）
 
   // 定义静态 CTA tile 大小
   auto bM = Int<128>{};

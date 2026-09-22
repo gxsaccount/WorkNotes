@@ -95,7 +95,9 @@ gemm_device(ProblemShape shape_MNK, CtaTiler cta_tiler,
   Tensor gB = local_tile(mB, cta_tiler, cta_coord, Step< X,_1,_1>{});  // (BLK_N,BLK_K,k)
   Tensor gC = local_tile(mC, cta_tiler, cta_coord, Step<_1,_1, X>{});  // (BLK_M,BLK_N)
 
-  // Shared memory 缓冲区
+  // 共享内存缓冲区。
+  // cosize_v<Layout> 会在编译期计算覆盖 Layout 所有物理 offset 所需的数组容量，
+  // 因此即使 Layout 含有 padding 或空洞也不会越界；容量单位是元素而不是字节。
   __shared__ TA smemA[cosize_v<ASmemLayout>];
   __shared__ TB smemB[cosize_v<BSmemLayout>];
   Tensor sA = make_tensor(make_smem_ptr(smemA), sA_layout);            // (BLK_M,BLK_K)
@@ -272,9 +274,10 @@ gemm_nt(int m, int n, int k,
   auto prob_shape = make_shape(M, N, K);                     // (M, N, K)
 
   // 定义 NT 的混合静态/动态 Stride
-  auto dA = make_stride(Int<1>{}, ldA);                      // (dM, dK)
-  auto dB = make_stride(Int<1>{}, ldB);                      // (dN, dK)
-  auto dC = make_stride(Int<1>{}, ldC);                      // (dM, dN)
+  // 哪个 mode 的 stride 为 1，哪个 mode 就在物理内存中连续。
+  auto dA = make_stride(Int<1>{}, ldA);                      // (dM,dK)：M mode stride=1，M 连续（M-major）
+  auto dB = make_stride(Int<1>{}, ldB);                      // (dN,dK)：N mode stride=1，N 连续（N-major）
+  auto dC = make_stride(Int<1>{}, ldC);                      // (dM,dN)：M mode stride=1，M 连续（M-major）
 
   // 定义静态 CTA tile 大小
   auto bM = Int<128>{};
@@ -342,9 +345,10 @@ gemm_tn(int m, int n, int k,
   auto prob_shape = make_shape(M, N, K);                     // (M, N, K)
 
   // 定义 TN 的混合静态/动态 Stride
-  auto dA = make_stride(ldA, Int<1>{});                      // (dM, dK)
-  auto dB = make_stride(ldB, Int<1>{});                      // (dN, dK)
-  auto dC = make_stride(Int<1>{}, ldC);                      // (dM, dN)
+  // 哪个 mode 的 stride 为 1，哪个 mode 就在物理内存中连续。
+  auto dA = make_stride(ldA, Int<1>{});                      // (dM,dK)：K mode stride=1，K 连续（K-major）
+  auto dB = make_stride(ldB, Int<1>{});                      // (dN,dK)：K mode stride=1，K 连续（K-major）
+  auto dC = make_stride(Int<1>{}, ldC);                      // (dM,dN)：M mode stride=1，M 连续（M-major）
 
   // 定义静态 CTA tile 大小
   auto bM = Int<128>{};
