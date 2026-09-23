@@ -151,6 +151,12 @@ gemm_device(ProblemShape shape_MNK, CtaTiler cta_tiler,
   Tensor tAsA = thr_copy_a.partition_D(sA);                            // (CPY,CPY_M,CPY_K)
   // 分配与目标分区 Shape/Layout 相同的 owning register Tensor。
   // 后续先执行 global → register，再执行 register → shared。
+  // 普通的 direct global → shared copy（非 cp.async）在机器指令层通常也会拆成
+  // LDG：global → 临时寄存器，再由 STS：临时寄存器 → shared。
+  // 显式 tArA 的区别是延长寄存器数据的生命周期：先预取下一 tile，中间执行
+  // 与 tArA 无数据依赖的当前 GEMM，下一轮才将 tArA 写入 shared。
+  // 如果寄存器压力过大，编译器可能把部分值 spill 到 local memory，导致额外
+  // device-memory load/store，并削弱这种 register staging 的收益。
   Tensor tArA = make_fragment_like(tAsA);                              // (CPY,CPY_M,CPY_K)
 
   ThrCopy thr_copy_b = copy_b.get_slice(threadIdx.x);
@@ -258,7 +264,7 @@ gemm_device(ProblemShape shape_MNK, CtaTiler cta_tiler,
   //   数据先从 global 读到 register，再通过 TiledCopy 分区写入 shared
   //   gemm(.) 通过 TiledMMA 分区直接使用 shared memory
 
-  auto K_TILE_MAX = size<3>(tAgA);
+  auto K_TILE_MAX = size<3>(tAgA); // = 64
 
   for (int k_tile = 0; k_tile < K_TILE_MAX; ++k_tile)
   {
@@ -295,6 +301,9 @@ gemm_device(ProblemShape shape_MNK, CtaTiler cta_tiler,
     //   }
 
     // 在按 MMA 分区的 smem 上执行 GEMM
+    // tCsA: (1,8,8) // MMA,M,K
+    // tCsB: (1,8,8) // MMA,N,K
+    // tCrC: (1,8,8) // MMA,M,N
     gemm(mma, tCsA, tCsB, tCrC);
     // 教程：上面的 gemm(tCsA, tCsB, tCrC) 等价于
     //   CUTE_UNROLL

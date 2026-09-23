@@ -197,7 +197,7 @@ gemm_device(ProblemShape shape_MNK, CtaTiler cta_tiler,
   //   copy(.) 通过 tA/tB 分区操作 global 与 shared memory
   //   gemm(.) 通过 tC 分区操作 shared 与 register memory
 
-  auto K_TILE_MAX = size<2>(tAgA); // tAgA sahpe: (BLK_M,BLK_K,k)  ， k个（BLK_M,BLK_K）的快
+  auto K_TILE_MAX = size<2>(tAgA); // tAgA sahpe: (BLK_M,BLK_K,k)  ， k个（BLK_M,BLK_K）的快； = 64
 
   for (int k_tile = 0; k_tile < K_TILE_MAX; ++k_tile)
   {
@@ -224,6 +224,9 @@ gemm_device(ProblemShape shape_MNK, CtaTiler cta_tiler,
     // 这是 cute::gemm，并非 CUDA/C++ 内置函数
     // 三参数形式执行原地累加：tCrC += tCsA * tCsB
     // 此处未传入 MMA Atom，因此 CuTe 分派到默认 UniversalFMA
+    // tCsA: (8,8) // M,K
+    // tCsB: (8,8) // N,K
+    // tCrC: (8,8) // M,N
     gemm(tCsA, tCsB, tCrC);            // (THR_M,THR_N) += (THR_M,BLK_K) * (THR_N,BLK_K) =》 (8,8) += (8,8) * (8,8)
 
     // 教程：上面的 gemm(tCsA, tCsB, tCrC) 等价于

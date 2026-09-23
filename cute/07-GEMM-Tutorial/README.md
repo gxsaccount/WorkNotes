@@ -74,6 +74,7 @@ Epilogue：把 accumulator 合并到 C
 本地可运行副本及 CPU reference 检查见：
 
 - [代码实验：官方 GEMM 示例与结果检查](代码实验/README.md)
+- [四个教程版本的优化演进与实测效果](四版本优化演进.md)
 
 本章把 Layout、Tensor、Copy 和 MMA 组合成完整 GEMM kernel。
 

@@ -2,7 +2,7 @@
 
 > 官方示例：`sgemm_1.cu` 与 `sgemm_2.cu`
 >
-> 更新：2026-09-22
+> 更新：2026-09-23
 
 CTA 已经通过 `local_tile` 得到：
 
@@ -267,6 +267,41 @@ size<0>(tAgA) = size<0>(tAsA) = 4
 global → register → shared
 ```
 
+### 普通 direct copy 其实也会经过寄存器
+
+对普通 load/store 路径（不是 `cp.async`），源码中的：
+
+```cpp
+copy(global_view, shared_view);
+```
+
+在机器指令层通常仍然需要：
+
+```text
+LDG：global memory → 临时寄存器
+STS：临时寄存器 → shared memory
+```
+
+区别在于临时寄存器的生命周期：
+
+```text
+普通 direct copy：
+  LDG 后立即 STS
+  寄存器只用于连接相邻的 load/store
+
+显式 tArA/tBrB staging：
+  LDG 下一 tile → tArA/tBrB
+  中间执行不依赖这些寄存器的当前 GEMM
+  下一轮才 STS → shared memory
+```
+
+所以显式 register staging 的目的不是“global 不能直接写 shared”，而是：
+
+- 为下一 K tile 提供与当前 shared tile 分离的缓冲区；
+- 延长预取数据的生命周期；
+- 为 global load 与当前计算的重叠创造机会；
+- 允许 global 和 shared 两侧采用不同分区或 Layout。
+
 先创建每线程 register fragment：
 
 ```cpp
@@ -344,6 +379,58 @@ cp.async：
 
 `sgemm_2` 把下一 tile 提前读入寄存器，只是为 global-load 延迟与当前 GEMM
 重叠创造机会；实际重叠程度仍取决于编译器调度和硬件执行。
+
+### 寄存器不够时会发生什么
+
+寄存器压力升高时，常见结果按影响理解：
+
+1. **Occupancy 下降**
+   每线程寄存器越多，一个 SM 同时容纳的 blocks/warps 越少。
+2. **Spill 到 local memory**
+   编译器可能将部分本应位于寄存器的值存入每线程 local-memory 地址空间。
+3. **极端情况下 kernel 无法启动**
+   若一个 block 的资源需求超过硬件上限，会出现
+   `too many resources requested for launch`。
+
+CUDA 的 local memory 名称虽然带有 “local”，但它不是片上寄存器：
+
+```text
+逻辑上：每线程私有
+物理上：位于 device memory，通常经过 L1/L2 cache
+```
+
+spill 会新增：
+
+```text
+register → local memory 的 store
+local memory → register 的 load
+```
+
+因此可能显著增加延迟和显存流量，抵消 register staging 的收益。
+
+检查方式：
+
+```bash
+nvcc ... -Xptxas=-v
+```
+
+关注：
+
+```text
+Used N registers
+spill stores
+spill loads
+```
+
+也可以：
+
+```bash
+cuobjdump --dump-resource-usage binary
+```
+
+当前在 A100 SM80 上编译的 `sgemm_sm70` 实例使用约 `102～106`
+registers/thread，`LOCAL:0`，表示当前构建没有发生 spill。重新编译到其他 GPU
+架构后，寄存器数量和 spill 情况可能变化。
 
 ### 为什么 `sgemm_2` 没有 `cp_async_fence/wait`
 

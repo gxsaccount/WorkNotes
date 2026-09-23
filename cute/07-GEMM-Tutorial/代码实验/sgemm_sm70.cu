@@ -112,6 +112,10 @@ gemm_device(ProblemShape shape_MNK, CtaTiler cta_tiler,
   ThrCopy thr_copy_a = copy_a.get_slice(threadIdx.x);
   Tensor tAgA = thr_copy_a.partition_S(gA);                            // (CPY,CPY_M,CPY_K,k)
   Tensor tAsA = thr_copy_a.partition_D(sA);                            // (CPY,CPY_M,CPY_K)
+  // 普通 direct global → shared copy（非 cp.async）底层也通常经过临时寄存器：
+  // LDG(global→register) + STS(register→shared)。显式 tArA 将下一 tile 长时间
+  // 保存在寄存器中，以便与当前 tile 的 GEMM 流水重叠。
+  // 寄存器不足时编译器可能 spill 到 local memory，增加 device-memory 访问。
   Tensor tArA = make_fragment_like(tAsA);                              // (CPY,CPY_M,CPY_K)
 
   ThrCopy thr_copy_b = copy_b.get_slice(threadIdx.x);
@@ -209,8 +213,8 @@ gemm_device(ProblemShape shape_MNK, CtaTiler cta_tiler,
   // 为 k_block=0 加载 A、B：smem → register
   copy(tCsA(_,_,0), tCrA(_,_,0));
   copy(tCsB(_,_,0), tCrB(_,_,0));
-  auto K_TILE_MAX  = size<3>(tAgA);
-  auto K_BLOCK_MAX = size<2>(tCrA);
+  auto K_TILE_MAX  = size<3>(tAgA); // 64
+  auto K_BLOCK_MAX = size<2>(tCrA); // 8
 
   CUTE_NO_UNROLL
   for (int k_tile = 0; k_tile < K_TILE_MAX; ++k_tile)
@@ -240,6 +244,9 @@ gemm_device(ProblemShape shape_MNK, CtaTiler cta_tiler,
         copy(copy_b, tBgB(_,_,_,k_tile_next), tBrB);
       }
       // 对当前 k_block 执行线程级寄存器 GEMM
+      // A: (1,8)   // MMA,M
+      // B: (1,8)   // MMA,N
+      // C: (1,8,8) // MMA,M,N
       gemm(mma, tCrA(_,_,k_block), tCrB(_,_,k_block), tCrC);
     } // k_block
   } // k_tile
