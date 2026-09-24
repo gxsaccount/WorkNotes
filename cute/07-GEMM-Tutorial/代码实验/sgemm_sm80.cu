@@ -133,16 +133,16 @@ gemm_device(ProblemShape shape_MNK, CtaTiler cta_tiler,
   // 预取
   //
 
-  auto K_PIPE_MAX = size<3>(tAsA);
+  auto K_PIPE_MAX = size<3>(tAsA); // 3
 
   // 剩余 tile 总数
-  int k_tile_count = size<3>(tAgA);
+  int k_tile_count = size<3>(tAgA);  // 8
   // 下一次从 gmem 读取的 tile 编号
   int k_tile_next = 0;
 
   // 除最后一级外，为其余 pipeline stage 启动异步加载
   CUTE_UNROLL
-  for (int k_pipe = 0; k_pipe < K_PIPE_MAX-1; ++k_pipe) {
+  for (int k_pipe = 0; k_pipe < K_PIPE_MAX-1; ++k_pipe) {   // 这里只有2（K_PIPE_MAX-1）个group
     copy(copy_a, tAgA(_,_,_,k_tile_next), tAsA(_,_,_,k_pipe));
     copy(copy_b, tBgB(_,_,_,k_tile_next), tBsB(_,_,_,k_pipe));
     cp_async_fence();
@@ -157,10 +157,13 @@ gemm_device(ProblemShape shape_MNK, CtaTiler cta_tiler,
   ThrMMA thr_mma = mma.get_slice(threadIdx.x);
   Tensor tCgC = thr_mma.partition_C(gC);                               // (MMA,MMA_M,MMA_N)
 
-  // 为流水线分配寄存器
+  // 为 Tensor Core 流水线分配 A/B operand register fragment。
+  // partition_fragment_A/B 先根据 MMA 的 A/B TV Layout 确定当前 lane 所需的
+  // fragment Shape，再创建 owning register Tensor；此时只分配寄存器，
+  // shared-memory 数据尚未加载进来。
   Tensor tCrA = thr_mma.partition_fragment_A(sA(_,_,0));               // (MMA,MMA_M,MMA_K)
   Tensor tCrB = thr_mma.partition_fragment_B(sB(_,_,0));               // (MMA,MMA_N,MMA_K)
-  // 分配 accumulator，其大小与投影后的数据相同
+  // 分配 Tensor Core accumulator register fragment。
   Tensor tCrC = thr_mma.make_fragment_C(tCgC);                         // (MMA,MMA_M,MMA_N)
 
   CUTE_STATIC_ASSERT_V((  shape(tCrC) == take<0,3>(shape(tCgC))));     // (MMA,MMA_M,MMA_N)
@@ -171,13 +174,35 @@ gemm_device(ProblemShape shape_MNK, CtaTiler cta_tiler,
   clear(tCrC);
 
   //
-  // 按 Copy Atom 重新分块
+  // 为 ldmatrix 构造 shared → register 的 TiledCopy。
+  //
+  // ldmatrix 只负责搬运与重排，不执行矩阵乘法：
+  //   shared memory --ldmatrix--> A/B operand registers
+  //
+  // make_tiled_copy_A/B 会读取 mma 的 A/B TV Layout，生成与 Tensor Core
+  // fragment 对齐的 Copy Thread/Value Layout，确保每个 lane 从正确的 shared
+  // 坐标读取，并写入该 lane 对应的 MMA register slot。
   //
 
   TiledCopy s2r_copy_a = make_tiled_copy_A(s2r_atom_a, mma);
   ThrCopy   s2r_thr_copy_a = s2r_copy_a.get_slice(threadIdx.x);
+  // ldmatrix 的 shared source view。
   Tensor tXsA = s2r_thr_copy_a.partition_S(sA);                        // (CPY,MMA_M,MMA_K,PIPE)
+  // tCrA 已经是当前线程私有的 MMA register fragment，不需要再次按线程分区。
+  // retile_D 建立映射：
+  //   ldmatrix 的第几个输出 value（CPY value）
+  //     → 应写入 tCrA 中哪个 MMA A-fragment register slot。
+  // tXrA 与 tCrA 使用同一批寄存器；这里只改变索引方式，不分配、不搬数据。
+  // partition_D：
+  // 整个目标里，我这个线程负责哪一块？
+
+  // retile_D：
+  // 我已有的这些寄存器，Copy Atom 的第 N 个输出该写到哪一个？
   Tensor tXrA = s2r_thr_copy_a.retile_D(tCrA);                         // (CPY,MMA_M,MMA_K)
+
+
+
+
 
   TiledCopy s2r_copy_b = make_tiled_copy_B(s2r_atom_b, mma);
   ThrCopy   s2r_thr_copy_b = s2r_copy_b.get_slice(threadIdx.x);
@@ -225,9 +250,17 @@ gemm_device(ProblemShape shape_MNK, CtaTiler cta_tiler,
   // 当前读取的 smem pipeline stage
   int smem_pipe_read  = 0;
   // 当前写入的 smem pipeline stage
-  int smem_pipe_write = K_PIPE_MAX-1;
+  int smem_pipe_write = K_PIPE_MAX-1; // 0,1,2
 
-  // 取得当前 pipeline stage 的切片
+  // 取得当前 pipeline stage 的 shared-memory source view。
+  // 当前 Tensor Core 配置下：
+  //   tXsA/tXsB  = (CPY=8, MMA_M/N=4, MMA_K=4, PIPE=3)
+  //   tXsA_p/B_p = (CPY=8, MMA_M/N=4, MMA_K=4)
+  //
+  // 最后一维固定为 smem_pipe_read 后被切掉：
+  //   tXsA(_,_,_,smem_pipe_read)
+  //     → 当前 stage 中供 ldmatrix 读取的 A view。
+  // 这里只创建 nonowning view，不会搬运 shared-memory 数据。
   Tensor tXsA_p = tXsA(_,_,_,smem_pipe_read);
   Tensor tXsB_p = tXsB(_,_,_,smem_pipe_read);
 
@@ -259,8 +292,27 @@ gemm_device(ProblemShape shape_MNK, CtaTiler cta_tiler,
   //     smem→rmem 可与寄存器计算重叠
   //
 
+
+/**
+ * +----------+--------------+--------------+----------------+
+ * | Phase    | k_tile_count | Compute tile | Prefetch tile  |
+ * +----------+--------------+--------------+----------------+
+ * | Prologue |            8 | -            | tile 0         |
+ * | Prologue |            7 | -            | tile 1         |
+ * | Mainloop |            6 | tile 0       | tile 2         |
+ * | Mainloop |            5 | tile 1       | tile 3         |
+ * | Mainloop |            4 | tile 2       | tile 4         |
+ * | Mainloop |            3 | tile 3       | tile 5         |
+ * | Mainloop |            2 | tile 4       | tile 6         |
+ * | Mainloop |            1 | tile 5       | tile 7         |
+ * | Drain    |            0 | tile 6       | tile 7 (dummy) |
+ * | Drain    |           -1 | tile 7       | tile 7 (dummy) |
+ * | End      |           -2 | -            | -              |
+ * +----------+--------------+--------------+----------------+
+ */
   CUTE_NO_UNROLL
-  while (k_tile_count > -(K_PIPE_MAX-1))
+  // 初始时k_tile_count = 6 ，有俩以及预取
+  while (k_tile_count > -(K_PIPE_MAX-1))  // while (k_tile_count > -2) ,因为三级流水线，tile为-1时计算tile 7
   {
     CUTE_UNROLL
     for (int k_block = 0; k_block < K_BLOCK_MAX; ++k_block)
@@ -295,7 +347,16 @@ gemm_device(ProblemShape shape_MNK, CtaTiler cta_tiler,
         smem_pipe_write = smem_pipe_read;
         smem_pipe_read = (smem_pipe_read == K_PIPE_MAX-1) ? 0 : smem_pipe_read+1;
       }
-      // 对当前 k_block 执行线程级寄存器 GEMM
+      // 对当前 k_block 执行 Tensor Core register GEMM
+      // 完整 fragment：
+      //   tCrA: ((_2,_2,_2),_4,_4) // MMA_A=8, MMA_M=4, MMA_K=4
+      //   tCrB: ((_2,_2),   _8,_4) // MMA_B=4, MMA_N=8, MMA_K=4
+      //   tCrC: ((_2,_2),   _4,_8) // MMA_C=4, MMA_M=4, MMA_N=8
+      // 固定 k_block 后，本次 gemm 入参：
+      //   A: ((_2,_2,_2),_4)       // MMA_A=8, MMA_M=4
+      //   B: ((_2,_2),_8)          // MMA_B=4, MMA_N=8
+      //   C: ((_2,_2),_4,_8)       // MMA_C=4, MMA_M=4, MMA_N=8
+      // A/B/C 的 MMA value 数由各自的 Atom TV Layout 决定，不要求相同。
       gemm(mma, tCrA(_,_,k_block), tCrB(_,_,k_block), tCrC);
     }
 
@@ -348,10 +409,27 @@ gemm_tn(int m, int n, int k,
   auto dB = make_stride(ldB, Int<1>{});                      // (dN,dK)：K mode stride=1，K 连续（K-major）
   auto dC = make_stride(Int<1>{}, ldC);                      // (dM,dN)：M mode stride=1，M 连续（M-major）
 
-  // 定义静态 CTA tile 大小
+  // 定义静态 CTA tile 大小。这是面向当前 A100/SM80 教程的一组调优配置，
+  // 不是 CuTe 根据 MMA Atom 唯一推导出的结果。
+  //
+  // bM=bN=128：
+  //   一个 CTA 计算 128x128 的 C tile。当前 TiledMMA tile 是 32x32，
+  //   所以在 M/N 方向各重复 128/32=4 次。
+  //
+  // bK=64：
+  //   当前 Tensor Core TiledMMA 的 K tile 是 16，所以一个 CTA K tile
+  //   包含 64/16=4 个 MMA k_block，并减少完整 K 维上的 k_tile 循环次数。
+  //
+  // bP=3：
+  //   三份 shared-memory stage 分别用于当前计算、下一 tile 就绪、再下一 tile
+  //   通过 cp.async 加载。
+  //
+  // FP16 A/B shared-memory 逻辑容量约为：
+  //   2 matrices * 128 * 64 * 3 stages * 2 bytes = 98304 bytes（96 KiB）。
+  // 修改 tile 时必须一起检查寄存器压力、shared-memory 上限和 occupancy。
   auto bM = Int<128>{};
   auto bN = Int<128>{};
-  auto bK = Int< 64>{};
+  auto bK = Int< 64>{};// 综合考虑shm、寄存器上限、tensor core算力强，计算耗时久了可以更好隐藏访存耗时
   auto cta_tiler = make_shape(bM, bN, bK);                   // (BLK_M, BLK_N, BLK_K)
   auto bP = Int<3>{};  // Pipeline 级数
 
@@ -361,7 +439,7 @@ gemm_tn(int m, int n, int k,
                                   Layout<Shape <_8,Shape <_8, _8>>,
                                          Stride<_8,Stride<_1,_64>>>{});
 
-  auto sA = tile_to_shape(swizzle_atom, make_shape(bM,bK,bP));
+  auto sA = tile_to_shape(swizzle_atom, make_shape(bM,bK,bP)); // 以 swizzle_atom 为基本布局单元，按其布局规则重复铺开，最终覆盖 (bM, bK, bP) 这个逻辑 Shape
   auto sB = tile_to_shape(swizzle_atom, make_shape(bN,bK,bP));
   auto sC = make_layout(make_shape(bM, bN));
 
@@ -374,10 +452,27 @@ gemm_tn(int m, int n, int k,
                                     Layout<Shape<_16,_8>,Stride<_8,_1>>{},  // 线程 Layout 16x8 K-major
                                     Layout<Shape< _1,_8>>{});               // Value Layout  1x8 N-major
 
+  // Tensor Core MMA Atom：
+  //   SM80_16x8x16_F16F16F16F16_TN
+  //   一个 warp 的 32 个 lanes 协作执行一次 16x8x16 矩阵乘加；
+  //   A/B、初始 accumulator C 和结果 D 都是 FP16。
+  //   底层对应 mma.sync/HMMA，而不是普通单线程 FFMA。
+  //
+  // 基础 Atom 为 16x8x16、一个 warp。
+  // Atom Layout 2x2 在线程上复制 4 个 warp Atom：自然覆盖 32x16x16，
+  // 共使用 4*32=128 threads。
+  // 第三个参数将最终逻辑 tile 扩展为 32x32x16；额外的 N 范围由现有线程
+  // 持有更多 value 覆盖，不再增加线程。
   TiledMMA mmaC = make_tiled_mma(SM80_16x8x16_F16F16F16F16_TN{},
-                                 Layout<Shape<_2,_2>>{},    // 2x2x1 个 MMA Atom
-                                 Tile<_32,_32,_16>{});      // 32x32x16 用于 LDSM 的 Tiled MMA
+                                 Layout<Shape<_2,_2>>{},    // 4 个 warp Atom，128 threads
+                                 Tile<_32,_32,_16>{});      // 最终逻辑 TiledMMA tile
 
+  // Shared → Register 使用 ldmatrix：
+  //   SM75_U32x4_LDSM_N 对应非转置的 ldmatrix.x4；
+  //   一个 warp 协作从 shared memory 读取四组 8x8 b16 matrix fragment；
+  //   每个 lane 得到 4 个 32-bit register，每个 register 打包 2 个 FP16。
+  // ldmatrix 负责把 shared 数据放入 Tensor Core 所要求的 lane/register 分布。
+  //
   //Copy_Atom<DefaultCopy, half_t> s2r_atom_A;
   //Copy_Atom<UniversalCopy<half_t>, half_t> s2r_atom_A;
   //Copy_Atom<SM75_U32x1_LDSM_N, half_t> s2r_atom_A;
@@ -414,11 +509,16 @@ gemm_tn(int m, int n, int k,
     cute::half_t, decltype(dC), decltype(sC), decltype(mmaC),
     decltype(alpha), decltype(beta)>;
 
-  // 将 L1/shared-memory carveout 设置为优先 shared memory
+  // 允许该 kernel 的每个 thread block 使用最多 smem_size 字节的
+  // 动态 shared memory。这里只设置可申请的上限，实际分配量由下面
+  // kernel launch 的第三个参数 <<<dimGrid, dimBlock, smem_size>>> 指定。
   cudaFuncSetAttribute(
     kernel_fptr,
     cudaFuncAttributeMaxDynamicSharedMemorySize, smem_size);
 
+  // L1 cache 与 shared memory 共用片上资源时，优先将资源分配给
+  // shared memory。100 表示尽可能选择最大的 shared-memory carveout；
+  // 这是性能偏好提示，实际采用的比例由 GPU 和 CUDA 驱动决定。
   cudaFuncSetAttribute(
     kernel_fptr,
     cudaFuncAttributePreferredSharedMemoryCarveout, 100);
@@ -582,6 +682,12 @@ gemm_tn(int m, int n, int k,
        C, dC, sC, mmaC,
        alpha, beta);
 }
+
+
+// sm80 文件
+// ├─ half TN 特化 → Tensor Core
+// ├─ half NT 特化 → 当前未实现
+// └─ 泛型 NT/TN   → UniversalFMA
 
 template <class TA, class TB, class TC,
           class Alpha, class Beta>

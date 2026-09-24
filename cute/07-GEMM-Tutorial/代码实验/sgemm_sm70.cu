@@ -146,10 +146,10 @@ gemm_device(ProblemShape shape_MNK, CtaTiler cta_tiler,
   Tensor tCsB = thr_mma.partition_B(sB);                               // (MMA,MMA_N,MMA_K)
   Tensor tCgC = thr_mma.partition_C(gC);                               // (MMA,MMA_M,MMA_N)
 
-  // 为流水线分配寄存器
+  // 为流水线分配寄存器。
   Tensor tCrA = thr_mma.make_fragment_A(tCsA);                         // (MMA,MMA_M,MMA_K)
   Tensor tCrB = thr_mma.make_fragment_B(tCsB);                         // (MMA,MMA_N,MMA_K)
-  // 分配 accumulator，其大小与投影后的数据相同
+  // 分配 accumulator，其大小与投影后的数据相同。
   Tensor tCrC = thr_mma.make_fragment_C(tCgC);                         // (MMA,MMA_M,MMA_N)
 
   CUTE_STATIC_ASSERT_V(  shape(tCrA) ==   shape(tCsA));                // (MMA,MMA_M,MMA_K)
@@ -244,9 +244,14 @@ gemm_device(ProblemShape shape_MNK, CtaTiler cta_tiler,
         copy(copy_b, tBgB(_,_,_,k_tile_next), tBrB);
       }
       // 对当前 k_block 执行线程级寄存器 GEMM
-      // A: (1,8)   // MMA,M
-      // B: (1,8)   // MMA,N
-      // C: (1,8,8) // MMA,M,N
+      // 完整 fragment：
+      //   tCrA: (1,8,8) // MMA,M,K
+      //   tCrB: (1,8,8) // MMA,N,K
+      //   tCrC: (1,8,8) // MMA,M,N
+      // 固定 k_block 后，本次 gemm 入参：
+      //   A: (1,8)   // MMA,M
+      //   B: (1,8)   // MMA,N
+      //   C: (1,8,8) // MMA,M,N
       gemm(mma, tCrA(_,_,k_block), tCrB(_,_,k_block), tCrC);
     } // k_block
   } // k_tile
