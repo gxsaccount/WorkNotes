@@ -1,0 +1,29 @@
+{
+  "element_bytes": 4,
+  "domain_size": 1024,
+  "search": {
+    "max_bits": 5,
+    "max_base": 5,
+    "max_shift": 10
+  },
+  "groups": [
+    {
+      "name": "row-load",
+      "access_bytes": 4,
+      "range": {
+        "start": 0,
+        "step": 1,
+        "count": 32
+      }
+    },
+    {
+      "name": "column-load",
+      "access_bytes": 4,
+      "range": {
+        "start": 0,
+        "step": 32,
+        "count": 32
+      }
+    }
+  ]
+}
