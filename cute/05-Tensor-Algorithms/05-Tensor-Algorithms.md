@@ -4,7 +4,7 @@
 >
 > 官方基线：NVIDIA CUTLASS `main`，核对日期 2026-09-16
 >
-> 前置章节：[Tensor](../04-Tensor/README.md)
+> 前置章节：[Tensor](../04-Tensor/04-Tensor.md)
 
 前一章解决了“如何描述数据”，本章开始解决“如何在 Tensor 上计算”：
 
@@ -19,21 +19,21 @@ CuTe 算法的关键不是把一个固定循环包装成函数，而是让参数
 
 ## 推荐学习顺序
 
-1. [copy](01-Copy/README.md)
+1. [copy](01-Copy/01-Copy.md)
    - 默认接口与 `Copy_Atom` 接口
    - 逻辑坐标遍历
    - 类型驱动的指令分派
    - 并行范围、异步完成与同步责任
-2. [copy_if](02-Copy-If/README.md)
+2. [copy_if](02-Copy-If/02-Copy-If.md)
    - predicate Tensor
    - 越界元素为什么必须跳过
    - false predicate 下目标元素保持不变
-3. [gemm](03-GEMM/README.md)
+3. [gemm](03-GEMM/03-GEMM.md)
    - 五种 mode 组合
    - `V`、`M`、`N`、`K` 的顺序
    - `C += A * B` 与 `D = A * B + C`
    - 默认 FMA 与 `MMA_Atom` 分派
-4. [axpby、fill、clear](04-Elementwise/README.md)
+4. [axpby、fill、clear](04-Elementwise/04-Elementwise.md)
    - Tensor 上的逐元素算法
    - predicate 与零初始化
 

@@ -4,7 +4,7 @@
 >
 > 官方基线：NVIDIA CUTLASS `main`，核对日期 2026-09-16
 >
-> 前置章节：[Tensor Algorithms](../05-Tensor-Algorithms/README.md)
+> 前置章节：[Tensor Algorithms](../05-Tensor-Algorithms/05-Tensor-Algorithms.md)
 
 MMA（Matrix Multiply-Accumulate）执行：
 
@@ -31,17 +31,17 @@ TiledMMA
 
 ## 推荐学习顺序
 
-1. [Operation 与 Traits](01-Operation与Traits/README.md)
+1. [Operation 与 Traits](01-Operation与Traits/01-Operation与Traits.md)
    - Operation 名称与寄存器接口
    - `fma`
    - `MMA_Traits`
    - `(thread,value) → operand coordinate`
-2. [TiledMMA](02-TiledMMA/README.md)
+2. [TiledMMA](02-TiledMMA/02-TiledMMA.md)
    - Atom 的线程复制与 value 复制
    - `get_slice`
    - `partition_A/B/C`
    - `make_fragment_A/B/C`
-3. [架构映射](03-架构映射/README.md)
+3. [架构映射](03-架构映射/03-架构映射.md)
    - 单线程、Volta quadpair、Ampere warp、Hopper warpgroup
    - accumulator 与 A/B operand 映射
    - shared-memory descriptor 的特殊含义

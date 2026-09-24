@@ -16,11 +16,11 @@
 
 具体推导和变体分别放在：
 
-- [Division：章节入口](05-Division/README.md)
+- [Division：章节入口](05-Division/05-Division.md)
   - [Logical Divide 1-D](05-Division/01-Logical-Divide-1D.md)
   - [Logical Divide 2-D](05-Division/02-Logical-Divide-2D.md)
   - [Zipped / Tiled / Flat Divide](05-Division/03-Divide-Variants.md)
-- [Product：章节入口](06-Product/README.md)
+- [Product：章节入口](06-Product/06-Product.md)
   - [Logical Product 1-D](06-Product/01-Logical-Product-1D.md)
   - [Repeat 与 Grid](06-Product/02-Logical-Index-and-Ordering.md)
   - [Blocked / Raked 与 Product 变体](06-Product/03-Product-Variants.md)

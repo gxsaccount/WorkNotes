@@ -64,7 +64,7 @@ Quickstart
 
 ## 3. 第 1～2 周：前置知识
 
-目录：[00-前置知识](00-前置知识/README.md)
+目录：[00-前置知识](00-前置知识/00-前置知识.md)
 
 ### 学习内容
 
@@ -86,8 +86,8 @@ Quickstart
 
 目录：
 
-- [01-Quickstart](01-Quickstart/README.md)
-- [10-CuTe-DSL](10-CuTe-DSL/README.md)
+- [01-Quickstart](01-Quickstart/01-Quickstart.md)
+- [10-CuTe-DSL](10-CuTe-DSL/10-CuTe-DSL.md)
 
 ### 学习内容
 
@@ -106,14 +106,14 @@ Quickstart
 
 ## 5. 第 4～5 周：Layout
 
-目录：[02-Layout](02-Layout/README.md)
+目录：[02-Layout](02-Layout/02-Layout.md)
 
 ### 官方子主题
 
-1. [基础类型与概念](02-Layout/01-基础类型与概念/README.md)
-2. [创建与使用](02-Layout/02-创建与使用/README.md)
-3. [坐标与兼容性](02-Layout/03-坐标与兼容性/README.md)
-4. [Layout 操作](02-Layout/04-Layout操作/README.md)
+1. [基础类型与概念](02-Layout/01-基础类型与概念/01-基础类型与概念.md)
+2. [创建与使用](02-Layout/02-创建与使用/02-创建与使用.md)
+3. [坐标与兼容性](02-Layout/03-坐标与兼容性/03-坐标与兼容性.md)
+4. [Layout 操作](02-Layout/04-Layout操作/04-Layout操作.md)
 
 ### 学习内容
 
@@ -144,17 +144,17 @@ Quickstart
 
 ## 6. 第 6～8 周：Layout Algebra
 
-目录：[03-Layout-Algebra](03-Layout-Algebra/README.md)
+目录：[03-Layout-Algebra](03-Layout-Algebra/03-Layout-Algebra.md)
 
 ### 6.1 Coalesce
 
-目录：[01-Coalesce](03-Layout-Algebra/01-Coalesce/README.md)
+目录：[01-Coalesce](03-Layout-Algebra/01-Coalesce/01-Coalesce.md)
 
 掌握退化 mode、相邻 mode 合并条件和 by-mode coalesce。
 
 ### 6.2 Composition
 
-目录：[02-Composition](03-Layout-Algebra/02-Composition/README.md)
+目录：[02-Composition](03-Layout-Algebra/02-Composition/02-Composition.md)
 
 掌握：
 
@@ -167,25 +167,25 @@ R(c) = A(B(c))
 
 ### 6.3 Composition Tilers
 
-目录：[03-Composition-Tilers](03-Layout-Algebra/03-Composition-Tilers/README.md)
+目录：[03-Composition-Tilers](03-Layout-Algebra/03-Composition-Tilers/03-Composition-Tilers.md)
 
 区分普通 concatenation、tuple tiler 和 by-mode tiler。
 
 ### 6.4 Complement
 
-目录：[04-Complement](03-Layout-Algebra/04-Complement/README.md)
+目录：[04-Complement](03-Layout-Algebra/04-Complement/04-Complement.md)
 
 理解 complement 是 tile 副本的基址 Layout，而不是遗漏元素列表。
 
 ### 6.5 Division
 
-目录：[05-Division](03-Layout-Algebra/05-Division/README.md)
+目录：[05-Division](03-Layout-Algebra/05-Division/05-Division.md)
 
 掌握 logical、zipped、tiled、flat divide，以及 permutation/gather 的边界。
 
 ### 6.6 Product
 
-目录：[06-Product](03-Layout-Algebra/06-Product/README.md)
+目录：[06-Product](03-Layout-Algebra/06-Product/06-Product.md)
 
 掌握 logical、blocked、raked、zipped 和 tiled product。
 
@@ -203,7 +203,7 @@ python3 -m unittest -v 03-Layout-Algebra/02-Composition/代码实验/tests/test_
 
 ## 7. 第 9 周：Tensor
 
-目录：[04-Tensor](04-Tensor/README.md)
+目录：[04-Tensor](04-Tensor/04-Tensor.md)
 
 ### 学习内容
 
@@ -224,7 +224,7 @@ python3 -m unittest -v 03-Layout-Algebra/02-Composition/代码实验/tests/test_
 
 ## 8. 第 10 周：Tensor Algorithms
 
-目录：[05-Tensor-Algorithms](05-Tensor-Algorithms/README.md)
+目录：[05-Tensor-Algorithms](05-Tensor-Algorithms/05-Tensor-Algorithms.md)
 
 ### 学习内容
 
@@ -242,7 +242,7 @@ python3 -m unittest -v 03-Layout-Algebra/02-Composition/代码实验/tests/test_
 
 ## 9. 第 11 周：MMA Atom
 
-目录：[06-MMA-Atom](06-MMA-Atom/README.md)
+目录：[06-MMA-Atom](06-MMA-Atom/06-MMA-Atom.md)
 
 ### 学习内容
 
@@ -263,7 +263,7 @@ python3 -m unittest -v 03-Layout-Algebra/02-Composition/代码实验/tests/test_
 
 ## 10. 第 12～13 周：完整 GEMM
 
-目录：[07-GEMM-Tutorial](07-GEMM-Tutorial/README.md)
+目录：[07-GEMM-Tutorial](07-GEMM-Tutorial/07-GEMM-Tutorial.md)
 
 ### 学习顺序
 
@@ -292,7 +292,7 @@ CPU Reference
 
 ## 11. 第 14 周：Predication
 
-目录：[08-Predication](08-Predication/README.md)
+目录：[08-Predication](08-Predication/08-Predication.md)
 
 ### 学习内容
 
@@ -310,7 +310,7 @@ GEMM 能正确处理 M、N、K 不是 tile 整数倍的情况。
 
 ## 12. 第 15 周：TMA Tensor
 
-目录：[09-TMA-Tensors](09-TMA-Tensors/README.md)
+目录：[09-TMA-Tensors](09-TMA-Tensors/09-TMA-Tensors.md)
 
 ### 学习内容
 
@@ -327,8 +327,8 @@ GEMM 能正确处理 M、N、K 不是 tile 整数倍的情况。
 
 目录：
 
-- [11-Architecture-MMA](11-Architecture-MMA/README.md)
-- [12-Engineering-Guides](12-Engineering-Guides/README.md)
+- [11-Architecture-MMA](11-Architecture-MMA/11-Architecture-MMA.md)
+- [12-Engineering-Guides](12-Engineering-Guides/12-Engineering-Guides.md)
 
 ### 架构专项
 

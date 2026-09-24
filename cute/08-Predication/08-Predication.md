@@ -5,8 +5,8 @@
 > 官方基线：NVIDIA CUTLASS `main`，文档最近一次修改提交
 > `8bdbfca68287232e5bf5793145f987569ecd312e`，核对日期 2026-09-24
 >
-> 前置章节：[GEMM Tutorial](../07-GEMM-Tutorial/README.md) 与
-> [`copy_if`](../05-Tensor-Algorithms/02-Copy-If/README.md)
+> 前置章节：[GEMM Tutorial](../07-GEMM-Tutorial/07-GEMM-Tutorial.md) 与
+> [`copy_if`](../05-Tensor-Algorithms/02-Copy-If/02-Copy-If.md)
 
 前面的 GEMM 示例默认 `M`、`N`、`K` 都能被 tile 整除。本章解决实际问题：
 

@@ -4,7 +4,7 @@
 >
 > 官方基线：NVIDIA CUTLASS `main`，核对日期 2026-09-15
 >
-> 前置章节：[Layout](../02-Layout/README.md) 与 [Layout Algebra](../03-Layout-Algebra/README.md)
+> 前置章节：[Layout](../02-Layout/02-Layout.md) 与 [Layout Algebra](../03-Layout-Algebra/03-Layout-Algebra.md)
 
 Tensor 把前两章的整数映射真正应用到数据上：
 
@@ -23,17 +23,17 @@ tensor(coord)
 
 ## 推荐学习顺序
 
-1. [Engine 与创建](01-Engine与创建/README.md)
+1. [Engine 与创建](01-Engine与创建/01-Engine与创建.md)
    - Tensor 的基本接口
    - Engine 与 tagged iterator
    - owning / nonowning Tensor
    - 元素访问和参数传递
-2. [Tiling 与 Slicing](02-Tiling与Slicing/README.md)
+2. [Tiling 与 Slicing](02-Tiling与Slicing/02-Tiling与Slicing.md)
    - Tensor 上的 Layout Algebra
    - `_` 切片语义
    - 新指针与新 Layout 如何组成 subtensor
    - 将任意 subtile 搬到寄存器
-3. [Partitioning](03-Partitioning/README.md)
+3. [Partitioning](03-Partitioning/03-Partitioning.md)
    - inner partition 与 `local_tile`
    - outer partition 与 `local_partition`
    - Thread-Value Layout

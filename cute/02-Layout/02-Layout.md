@@ -70,20 +70,20 @@ c --B--> 逻辑 index n --A--> 最终 offset
 
 ## 推荐学习顺序
 
-1. [基础类型与概念](01-基础类型与概念/README.md)
+1. [基础类型与概念](01-基础类型与概念/01-基础类型与概念.md)
    - Integer、Tuple、IntTuple
    - Shape、Stride、Layout、Tensor
    - 静态值、动态值、rank、depth、size
-2. [创建与使用](02-创建与使用/README.md)
+2. [创建与使用](02-创建与使用/02-创建与使用.md)
    - `make_shape`、`make_stride`、`make_layout`
    - `LayoutLeft` 与 `LayoutRight`
    - 向量、矩阵和层级 Layout
-3. [坐标与兼容性](03-坐标与兼容性/README.md)
+3. [坐标与兼容性](03-坐标与兼容性/03-坐标与兼容性.md)
    - 一维坐标、rank-D 坐标、自然坐标
    - `idx2crd`、`crd2idx`
    - `compatible`、`size`、`cosize`
    - 单射、广播、空洞和地址别名
-4. [Layout 操作](04-Layout操作/README.md)
+4. [Layout 操作](04-Layout操作/04-Layout操作.md)
    - sublayout、select、take
    - concatenation
    - grouping、flattening

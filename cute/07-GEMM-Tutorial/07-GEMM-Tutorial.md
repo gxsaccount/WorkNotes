@@ -4,8 +4,8 @@
 >
 > 官方基线：NVIDIA CUTLASS `main`，核对日期 2026-09-21
 >
-> 前置章节：[Tensor Algorithms](../05-Tensor-Algorithms/README.md) 与
-> [MMA Atom](../06-MMA-Atom/README.md)
+> 前置章节：[Tensor Algorithms](../05-Tensor-Algorithms/05-Tensor-Algorithms.md) 与
+> [MMA Atom](../06-MMA-Atom/06-MMA-Atom.md)
 
 这一章不再单独学习抽象，而是把前面的概念串成一条完整数据流：
 
@@ -30,22 +30,22 @@ global memory C
 
 ## 推荐学习顺序
 
-1. [Full Tensors 与 CTA Partitioning](01-Full-Tensors与CTA/README.md)
+1. [Full Tensors 与 CTA Partitioning](01-Full-Tensors与CTA/01-Full-Tensors与CTA.md)
    - `(M,K) × (N,K) → (M,N)`
    - M-major、N-major、K-major
    - `CtaTiler`
    - `local_tile`
-2. [SMEM 与 Copy Partitioning](02-SMEM与Copy/README.md)
+2. [SMEM 与 Copy Partitioning](02-SMEM与Copy/02-SMEM与Copy.md)
    - shared-memory Tensor
    - `local_partition`
    - `TiledCopy`
    - global → register → shared
-3. [Math Partitioning 与 Mainloop](03-Math与Mainloop/README.md)
+3. [Math Partitioning 与 Mainloop](03-Math与Mainloop/03-Math与Mainloop.md)
    - C tile 的线程分工
    - A/B 投影
    - accumulator fragment
    - K-loop、同步和 epilogue
-4. [SM70 与 SM80 演进](04-SM70与SM80/README.md)
+4. [SM70 与 SM80 演进](04-SM70与SM80/04-SM70与SM80.md)
    - shared/register pipeline
    - `cp.async`
    - multistage shared memory
@@ -73,7 +73,7 @@ Epilogue：把 accumulator 合并到 C
 
 本地可运行副本及 CPU reference 检查见：
 
-- [代码实验：官方 GEMM 示例与结果检查](代码实验/README.md)
+- [代码实验：官方 GEMM 示例与结果检查](代码实验/代码实验.md)
 - [四个教程版本的优化演进与实测效果](四版本优化演进.md)
 
 本章把 Layout、Tensor、Copy 和 MMA 组合成完整 GEMM kernel。
@@ -121,7 +121,7 @@ barrier / wait：
 
 官方这些基础示例假设 CTA tile 能整除问题尺寸。也就是说，示例中的 global
 load 没有完整处理越界。非整除问题将在下一章
-[Predication](../08-Predication/README.md) 处理。
+[Predication](../08-Predication/08-Predication.md) 处理。
 
 ## 学完后应能追踪
 

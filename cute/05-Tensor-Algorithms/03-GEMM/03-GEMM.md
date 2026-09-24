@@ -6,7 +6,7 @@
 
 本节只学习 CuTe `gemm` 的算法接口和 mode 约定。完整 CUDA kernel、CTA
 partition、shared-memory mainloop 和流水线放在
-[GEMM Tutorial](../../07-GEMM-Tutorial/README.md)。
+[GEMM Tutorial](../../07-GEMM-Tutorial/07-GEMM-Tutorial.md)。
 
 ## 1. 两种数学接口
 
@@ -217,7 +217,7 @@ gemm(mma_atom, D, A, B, C);
 Atom 还携带 A/B/C/D 的数据类型关系、单次操作的逻辑 Shape、thread/value 到
 fragment 的映射，以及 operand 和 accumulator 的布局约束。
 
-这些内容在下一章 [MMA Atom](../../06-MMA-Atom/README.md) 展开。
+这些内容在下一章 [MMA Atom](../../06-MMA-Atom/06-MMA-Atom.md) 展开。
 
 ## 6. Shape 兼容条件
 

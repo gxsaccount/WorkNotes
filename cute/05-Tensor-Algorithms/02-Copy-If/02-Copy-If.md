@@ -94,7 +94,7 @@ copy_if(pred, gmem_tile, smem_tile);
 ```
 
 完整的 identity coordinate Tensor 构造方式放在
-[Predication](../../08-Predication/README.md) 章节学习。
+[Predication](../../08-Predication/08-Predication.md) 章节学习。
 
 ## 4. 为什么 predicate 要与 copy 分区一致
 
