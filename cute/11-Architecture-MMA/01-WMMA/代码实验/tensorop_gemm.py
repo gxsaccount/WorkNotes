@@ -26,6 +26,10 @@
 # OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
+# 中文注释版出处：
+# https://github.com/NVIDIA/cutlass/blob/098de2a652cf8f00fd70b2df54051c7eccbb855a/examples/python/CuTeDSL/cute/ampere/kernel/dense_gemm/tensorop_gemm.py
+# 仅翻译注释、文档字符串和用户提示；代码逻辑与公开 API 保持不变。
+
 import argparse
 import math
 from functools import lru_cache
@@ -41,62 +45,21 @@ from cutlass.utils.tensor_helpers import create_cute_tensor_for_fp8
 from cutlass.utils.tensor_helpers import is_fp8_dtype
 
 """
-A dense GEMM (C = A * B) example for the NVIDIA Ampere architecture using CUTE DSL.
-- Matrix A is MxKxL, L is batch dimension, A can be row-major("K") or column-major("M")
-- Matrix B is NxKxL, L is batch dimension, B can be row-major("N") or column-major("K")
-- Matrix C is MxNxL, L is batch dimension, C can be row-major("N") or column-major("M")
+Ampere Warp MMA 批量 GEMM 示例。
 
-This GEMM kernel supports the following features:
-    - Utilizes Ampere's tensor cores for matrix multiply-accumulate (MMA) operations
-    - Threadblock rasterization to improve data re-use
-    - Supports multi-stage pipeline to overlap computation and memory access
-    - Implements shared memory buffering for epilogue to increase coalesced global memory access
+数据流：
+    GMEM --异步拷贝--> SMEM --ldmatrix--> RMEM --Warp MMA--> RMEM
 
-This GEMM works as follows:
-1. Load A and B matrices from global memory (GMEM) to shared memory (SMEM) using asynchronous copies.
-2. Perform matrix multiply-accumulate (MMA) operations.
-3. Store results from registers (RMEM) to shared memory (SMEM), then to global memory (GMEM).
+功能：
+- 支持 FP16、BF16 和 FP8 输入；
+- 支持 FP16 输出以及 FP16/FP32 累加；
+- 使用多 stage 流水重叠数据搬运与计算；
+- 使用共享内存完成合并写回。
 
-The Ampere tensor core instruction used operates as follows:
-- Read matrix A from SMEM
-- Read matrix B from SMEM
-- Perform MMA operation and store the result in Accumulator(register)
-
-To run this example:
-
-.. code-block:: bash
-
-    python examples/cute/ampere/kernel/dense_gemm/tensorop_gemm.py                                  \
-      --mnkl 8192,8192,8192,1 --atom_layout_mnk 2,2,1                        \
-      --ab_dtype Float16                                                     \
-      --c_dtype Float16 --acc_dtype Float32                                  \
-      --a_major m --b_major n --c_major n
-
-The above example command computes with M=8192, N=8192, K=8192,
-batch_count=1. The atom layout's shape is 2x2x1 and the input, mma
-accumulator, and output data type are set as fp16, fp32 and fp16,
-respectively.
-
-To collect performance with NCU profiler:
-
-.. code-block:: bash
-
-    ncu python examples/cute/ampere/kernel/dense_gemm/tensorop_gemm.py                              \
-      --mnkl 8192,8192,8192,1 --atom_layout_mnk 2,2,1                        \
-      --ab_dtype Float16                                                     \
-      --c_dtype Float16 --acc_dtype Float32                                  \
-      --a_major m --b_major n --c_major n                                    \
-      --skip_ref_check --iterations 2
-
-Constraints:
-* Supported input data types: fp16/bf16/fp8
-* Supported output data types: fp16
-* Support accumulator data types: f32/f16
-* Default tile shape is 128x128x32 for fp16/bf16 and 128x128x64 for fp8
-* Atom layout's MNK shape is set so that tile shape can be divided by MMA
-  instruction shape
-* The contiguous dimension of A/B/C tensors must be at least 16 bytes aligned,
-  i.e, number of elements is a multiple of 8
+约束：
+- FP16/BF16 默认 CTA tile 为 128×128×32；
+- FP8 默认 CTA tile 为 128×128×64；
+- A/B/C 的连续维度至少满足 16 字节对齐。
 """
 
 
@@ -121,7 +84,7 @@ class TensorOpGemm:
         self.acc_dtype = acc_dtype
         self.is_fp8 = self.ab_dtype in self._FP8_DTYPES
         assert self.ab_dtype in self._FP16_BF16_DTYPES + self._FP8_DTYPES, (
-            "ab_dtype must be one of Float16, BFloat16, Float8E4M3FN, Float8E5M2"
+            "ab_dtype 必须是 Float16、BFloat16、Float8E4M3FN 或 Float8E5M2"
         )
         self.cta_tiler = (
             self._CTA_TILER_FP8 if self.is_fp8 else self._CTA_TILER_FP16_BF16
@@ -137,24 +100,24 @@ class TensorOpGemm:
         )
         mmaM, mmaN, mmaK = self.mma_inst_shape
 
-        # M-major C uses C^T = B^T * A^T, swapping atom layout M/N roles.
+        # C 为 M-major 时改算 C^T = B^T * A^T，并交换 Atom layout 的 M/N 角色。
         if is_m_major_c:
             assert self.bM % (atom_lay_N * mmaM) == 0, (
-                "bM must be divisible by MMA instruction"
+                "bM 必须能被 MMA 指令 shape 整除"
             )
             assert self.bN % (atom_lay_M * mmaN) == 0, (
-                "bN must be divisible by MMA instruction"
+                "bN 必须能被 MMA 指令 shape 整除"
             )
         else:
             assert self.bM % (atom_lay_M * mmaM) == 0, (
-                "bM must be divisible by MMA instruction"
+                "bM 必须能被 MMA 指令 shape 整除"
             )
             assert self.bN % (atom_lay_N * mmaN) == 0, (
-                "bN must be divisible by MMA instruction"
+                "bN 必须能被 MMA 指令 shape 整除"
             )
-        assert atom_lay_K == 1, "this example does not support atom layout K > 1"
-        assert self.bK % mmaK == 0, "bK must be divisible by MMA instruction"
-        assert self.num_stages >= 3, "num_stages must be greater than or equal to 3"
+        assert atom_lay_K == 1, "本示例不支持 atom layout 的 K 维大于 1"
+        assert self.bK % mmaK == 0, "bK 必须能被 MMA 指令 shape 整除"
+        assert self.num_stages >= 3, "num_stages 必须大于或等于 3"
 
     @cute.jit
     def __call__(
@@ -165,15 +128,13 @@ class TensorOpGemm:
         stream: cuda.CUstream,
         epilogue_op: cutlass.Constexpr = lambda x: x,
     ):
-        # The grid divides the problems's M, N, and L dimensions by the
-        # respective modes of the tile shape (bM, bN, 1). The K dimension is
-        # handled within a block via a multistage process.
+        # grid 使用 tile shape (bM, bN, 1) 划分问题的 M、N、L 维；
+        # K 维由每个 block 内部的多 stage 流水处理。
 
-        # The Ampere MMA atom's accumulator layout writes M along the row
-        # dimension. When C is column-major (M-major), the accumulator does
-        # not naturally align with the contiguous dimension of C, so storing
-        # the result requires non-coalesced register/SMEM traffic. To avoid
-        # this we can compute C^T = B^T * A^T instead of C = A * B:
+        # Ampere MMA Atom 的累加器布局沿行方向排列 M 维。
+        # 当 C 为列主序（M-major）时，累加器布局与 C 的连续维不自然对齐，
+        # 写回会产生不合并的寄存器/SMEM 流量。
+        # 因此改为计算 C^T = B^T * A^T，而不是直接计算 C = A * B：
         if cutlass.const_expr(
             utils.LayoutEnum.from_tensor(mC) == utils.LayoutEnum.COL_MAJOR
         ):
@@ -192,16 +153,14 @@ class TensorOpGemm:
         self.c_major_mode = utils.LayoutEnum.from_tensor(mC)
 
         # ///////////////////////////////////////////////////////////////////////////////
-        # Shared memory layout:
+        # 共享内存布局：
         # ///////////////////////////////////////////////////////////////////////////////
 
-        # Creates a layout with the size required for the provided tile
-        # size and num stages (stages are used for K dimension) that is also
-        # sectioned into 64x8 or 8x32 layout atoms. The swizzle is set so that
-        # the atom for the shared memory -> register copy does not encounter
-        # bank conflicts
+        # 按给定 tile 大小和 stage 数构造 Layout，其中 stage 沿 K 维排列。
+        # Layout 由 64×8 或 8×32 的 Layout Atom 平铺而成，并设置 swizzle，
+        # 使 SMEM→RMEM 的拷贝避免共享内存 bank 冲突。
 
-        # assume the input is 16B align
+        # 假设输入满足 16 字节对齐。
         ab_copy_bits = 128
         sA_layout, sA_swizzle = self._make_smem_layout_AB(
             mA.element_type,
@@ -216,7 +175,7 @@ class TensorOpGemm:
             (self.cta_tiler[1], self.cta_tiler[2], self.num_stages),
         )
 
-        # Creates a similar layout but without num_stages or layout atoms
+        # 为 C 构造类似的 Layout，但不包含多 stage 维和上述 Layout Atom。
         sC_layout = self._make_smem_layout_C(
             mC.element_type,
             self.c_major_mode,
@@ -225,21 +184,19 @@ class TensorOpGemm:
         )
 
         # ///////////////////////////////////////////////////////////////////////////////
-        # Tiled copy:
-        # The majorness of tA/tB/tC follows the majorness of gA/gB/gC,
-        # enabling merged accesses to global memory for faster data
-        # transfer between global and shared memory.
+        # 分块拷贝：
+        # tA/tB/tC 的主序与 gA/gB/gC 一致，以便合并访问全局内存，
+        # 提高 GMEM 与 SMEM 之间的数据传输效率。
         # ///////////////////////////////////////////////////////////////////////////////
 
-        # Create a copy atom for a global to shared memory asynchronous copy
+        # 构造 GMEM→SMEM 异步拷贝使用的拷贝原子（CopyAtom）。
         atom_async_copy = cute.make_copy_atom(
             cute.nvgpu.cpasync.CopyG2SOp(cache_mode=cute.nvgpu.LoadCacheMode.GLOBAL),
             mA.element_type,
             num_bits_per_copy=ab_copy_bits,
         )
 
-        # Create thread layouts for tiled copy from the copy atom where the
-        # thread layout simply follows the leading dimension of the tensor
+        # 从拷贝原子构造分块拷贝（TiledCopy），线程布局沿张量主维排列。
         tiled_copy_A = self._make_gmem_tiled_copy_AB(
             atom_async_copy, mA.element_type, self.a_major_mode, ab_copy_bits
         )
@@ -247,7 +204,7 @@ class TensorOpGemm:
             atom_async_copy, mB.element_type, self.b_major_mode, ab_copy_bits
         )
 
-        # Creates a synchronous copy atom and thread layouts for the epilogue
+        # 为尾声构造同步拷贝原子和线程布局。
         c_copy_bits = 128
         atom_sync_copy = cute.make_copy_atom(
             cute.nvgpu.CopyUniversalOp(),
@@ -259,7 +216,7 @@ class TensorOpGemm:
         )
 
         # ///////////////////////////////////////////////////////////////////////////////
-        # Tiled MMA
+        # 分块 MMA
         # ///////////////////////////////////////////////////////////////////////////////
 
         if cutlass.const_expr(self.is_fp8):
@@ -273,15 +230,15 @@ class TensorOpGemm:
 
         permutation_mnk = (
             atom_layout_mnk[0] * self.mma_inst_shape[0],
-            # if atom layout's N-mode is 1, to leverage the largest coalesced
-            # shared memory -> register copy, set the tiled mma's N mode to 16
+            # 当 Atom layout 的 N mode 为 1 时，为获得最大粒度的
+            # SMEM→RMEM 合并拷贝，将 TiledMMA 的 N mode 扩展为 16。
             atom_layout_mnk[1] * self.mma_inst_shape[1] * 2,
             atom_layout_mnk[2] * self.mma_inst_shape[2],
         )
 
-        # Created a tiled mma that tiles the atom according to specified layout.
-        # For a 2x2x1 atom layout, the mma atom is duplicated 4 times, twice
-        # across M and twice across N
+        # 按指定 Atom layout 构造 TiledMMA。
+        # 对于 2×2×1 的 Atom layout，MMA Atom 共复制四份：
+        # M 方向两份，N 方向两份。
         tC = cute.make_layout(atom_layout_mnk)
         tiled_mma = cute.make_tiled_mma(
             op,
@@ -292,10 +249,10 @@ class TensorOpGemm:
         # grid_dim: ((m + BLK_M - 1) // BLK_M, (n + BLK_N - 1) // BLK_N, l)
         grid_dim = cute.ceil_div(mC.shape, (self.bM, self.bN, 1))
 
-        # Add threadblock rasterization to improve re-use of data
+        # 添加线程块光栅化以提高数据复用。
         raster_factor = 1
         grid_dim_n = cute.size(grid_dim[1])
-        # Thresholds picked so that it doesn't cause too many no-op CTAs
+        # 选择合适阈值，避免产生过多空操作 CTA。
         if grid_dim_n > 5:
             raster_factor = 8
         elif grid_dim_n > 2:
@@ -347,21 +304,21 @@ class TensorOpGemm:
         rasterization_factor: cutlass.Int32,
         epilogue_op: cutlass.Constexpr = lambda x: x,
     ):
-        # Thread index, block index
+        # 线程索引、块索引
         tidx, _, _ = cute.arch.thread_idx()
         bidx, bidy, bidz = cute.arch.block_idx()
         grid_dim = cute.ceil_div(mC.shape, (self.bM, self.bN, 1))
         offset_tile_x, offset_tile_y = self.raster_tile(
             bidx, bidy, rasterization_factor
         )
-        # Early exit if CTA is out of range
+        # 如果 CTA 超出范围则提前退出
         if grid_dim[0] <= offset_tile_x or grid_dim[1] <= offset_tile_y:
             pass
         else:
             tiler_coord = (offset_tile_x, offset_tile_y, None)
 
             # ///////////////////////////////////////////////////////////////////////////////
-            # Get the appropriate tiles for this thread block.
+            # 取得当前线程块对应的 tile。
             # gA: (BLK_M, BLK_N, k), gB: (BLK_N, BLK_K, k), gC: (BLK_M, BLK_N)
             # ///////////////////////////////////////////////////////////////////////////////
             gA = cute.local_tile(
@@ -383,27 +340,23 @@ class TensorOpGemm:
                 proj=(1, 1, None),
             )
 
-            # By default, if the tensor k mode does not divide into the tile k
-            # size, then last tiles in the k dimension are irregular.
-            # Instead, make the first tiles irregular when k is irregular.
-            # This allows us to handle the irregular tile first to avoid
-            # checking for this condition within the mainloop.
+            # 如果 Tensor 的 K mode 不能被 K tile 整除，默认最后一个 tile
+            # 会成为不规则 tile。这里反向移动起始指针，让第一个 tile 不规则，
+            # 从而先处理边界，避免在主循环中反复检查。
 
-            # residual_k is a negative number indicating the amount needed to
-            # shift the pointer by in dimension k
+            # residual_k 是负数，表示指针需要沿 K 维反向移动的距离。
             residual_k = cute.size(mA, mode=[1]) - cutlass.Int32(self.bK) * cute.size(
                 gA, mode=[2]
             )
 
-            # move the pointer of gA/gB in the `-k` direction
+            # 将 gA/gB 的指针沿 `-K` 方向移动。
             gA = cute.domain_offset((0, residual_k, 0), gA)
             gB = cute.domain_offset((0, residual_k, 0), gB)
-            # input is 16B aligned
+            # 输入满足 16 字节对齐。
             gA = cute.make_tensor(gA.iterator.align(16), gA.layout)
             gB = cute.make_tensor(gB.iterator.align(16), gB.layout)
 
-            # Construct identity layout for sA and sB (mirrors global tensors,
-            # used for predication only)
+            # 构造与全局 Tensor 同 shape 的恒等坐标 Tensor，仅用于谓词判断。
             mcA = cute.make_identity_tensor(mA.layout.shape)
             mcB = cute.make_identity_tensor(mB.layout.shape)
             cA = cute.local_tile(
@@ -423,7 +376,7 @@ class TensorOpGemm:
             cB = cute.domain_offset((0, residual_k, 0), cB)
 
             # ///////////////////////////////////////////////////////////////////////////////
-            # Create shared memory buffers and get the appropriate fragments for this thread.
+            # 创建共享内存缓冲区，并取得当前线程对应的 fragment。
             # sA:   (BLK_M, BLK_K, PIPE)       , sB:   (BLK_N, BLK_K, PIPE)
             # tAgA: (CPY, CPY_M, CPY_K, k)     , tBgB: (CPY, CPY_N, CPY_K, k)
             # tAsA: (CPY, CPY_M, CPY_K, PIPE)  , tBsB: (CPY, CPY_N, CPY_K, PIPE)
@@ -446,11 +399,10 @@ class TensorOpGemm:
                     16,
                 ]
 
-            # Shared memory buffer
+            # 共享内存缓冲区
             smem = cutlass.utils.SmemAllocator()
-            # Shared memory allocated for operations with A, B will be
-            # overwritten for operations on C. This is to improve performance
-            # by reducing the size of shared memory requested by each block
+            # A/B 使用的共享内存随后会由 C 的 epilogue 覆盖复用，
+            # 从而减少每个 block 申请的共享内存容量。
             storage = smem.allocate(
                 max(SharedStorageAB.size_in_bytes(), SharedStorageC.size_in_bytes()),
                 byte_alignment=16,
@@ -469,28 +421,22 @@ class TensorOpGemm:
             tCsC_epilogue = thr_copy_C.partition_S(sC)
             tCgC_epilogue = thr_copy_C.partition_D(gC)
 
-            # Repeat the partitioning with identity layouts
+            # 使用恒等坐标 Tensor 重复执行分区。
             tAcA = thr_copy_A.partition_S(cA)
             tBcB = thr_copy_B.partition_S(cB)
 
             # ///////////////////////////////////////////////////////////////////////////////
-            # Predicate: Mark indices that need to copy when problem_shape isn't a multiple
-            # of tile_shape
+            # 谓词：当 problem shape 不是 tile shape 的整数倍时，
+            # 标记仍需执行拷贝的有效索引。
             # ///////////////////////////////////////////////////////////////////////////////
 
-            # For predication over the tensors A (M/K), B (N/K), and (in the
-            # epilogue) C (M/N), we will compute it in a fashion similar to an
-            # outer product. The predication along one of the dimensions is
-            # evaluated and stored in a predication tensor. Then, the
-            # predication for the remaining dimension is handled later via an
-            # if/else branch at the copy.
-            # For A and B, predication booleans along M/N are stored in a
-            # predication tensor and along K is handled via a if/else branch.
+            # A(M/K)、B(N/K) 和 epilogue 中的 C(M/N) 都采用类似外积的
+            # 谓词方式：一个维度的有效性保存到谓词 Tensor，另一个维度
+            # 在执行拷贝时通过 if/else 判断。
+            # A/B 的 M/N 边界保存在谓词 Tensor 中，K 边界由 if/else 处理。
 
-            # Allocate predicate tensors for M and N. Predication is checked
-            # at the granularity of a copy atom, so the predicate tensor does not
-            # need separate booleans for individual elements within a copy
-            # atom (for example, the elements of tAgA.shape[0][0].)
+            # 为 M、N 分配谓词张量。谓词按拷贝原子粒度检查，
+            # 因此 Atom 内的每个元素不需要各自保存布尔值。
             tApA = cute.make_rmem_tensor(
                 cute.make_layout(
                     (
@@ -513,7 +459,7 @@ class TensorOpGemm:
                 ),
                 cutlass.Boolean,
             )
-            # Set predicates for M/N bounds
+            # 设置 M/N 边界谓词。
             for rest_v in range(tApA.shape[0]):
                 for m in range(tApA.shape[1]):
                     tApA[rest_v, m, 0] = cute.elem_less(
@@ -526,16 +472,14 @@ class TensorOpGemm:
                     )
 
             # ///////////////////////////////////////////////////////////////////////////////
-            # Prefetch Prologue
+            # 预取序言阶段
             # ///////////////////////////////////////////////////////////////////////////////
-            # Clear the smem tiles to account for predicated off loads
+            # 清零 SMEM tile，使被谓词屏蔽的加载位置保持为零。
             tAsA.fill(0)
             tBsB.fill(0)
             cute.arch.sync_threads()
-            # Start async loads for the first k-tile. Here we take care of the k residue
-            # via if/else check along the k dimension. Because we shifted the identity tensor
-            # by the residue_k and because the identity tensor is a coord tensor, the
-            # values of any identity tensor element that is poison is less than -1
+            # 异步加载第一个 K tile，并通过 K 维 if/else 处理余数。
+            # 恒等坐标 Tensor 已按 residual_k 平移，因此无效坐标小于 -1。
             num_smem_stages = cute.size(tAsA, mode=[3])
             k_tile_count = cute.size(tAgA, mode=[3])
             k_tile_index = cutlass.Int32(0)
@@ -559,7 +503,7 @@ class TensorOpGemm:
             k_tile_index = k_tile_index + 1
             cute.arch.cp_async_commit_group()
 
-            # Start async loads for rest of the k-tiles
+            # 为其余 K tile 发起异步加载。
             for k_tile in range(1, num_smem_stages - 1):
                 if k_tile == k_tile_count:
                     tApA.fill(0)
@@ -580,7 +524,7 @@ class TensorOpGemm:
                 cute.arch.cp_async_commit_group()
 
             # ///////////////////////////////////////////////////////////////////////////////
-            # Tile MMA compute thread partitions and allocate accumulators
+            # 对分块 MMA 的计算线程做分区，并分配累加器
             # ///////////////////////////////////////////////////////////////////////////////
             thr_mma = tiled_mma.get_slice(tidx)
             tCsA = thr_mma.partition_A(sA)
@@ -590,14 +534,14 @@ class TensorOpGemm:
             tCrA = tiled_mma.make_fragment_A(tCsA[None, None, None, 0])
             tCrB = tiled_mma.make_fragment_B(tCsB[None, None, None, 0])
             tCrC = tiled_mma.make_fragment_C(tCgC)
-            # Clear the accumulator
+            # 清零累加器。
             tCrC.fill(0.0)
 
             # ///////////////////////////////////////////////////////////////////////////////
-            # Copy Atom A/B retiling
+            # 为 A/B 的拷贝原子重新分块。
             # ///////////////////////////////////////////////////////////////////////////////
 
-            # Create the copy atoms for the copy from shared memory to register
+            # 构造 SMEM→RMEM 的拷贝原子。
             if cutlass.const_expr(self.is_fp8):
                 if cutlass.const_expr(self.a_major_mode == utils.LayoutEnum.ROW_MAJOR):
                     atom_copy_s2r_A = cute.make_copy_atom(
@@ -635,8 +579,7 @@ class TensorOpGemm:
                     mB.element_type,
                 )
 
-            # Creates the tiled copy so that it matches the thread-value layout
-            # expected by the tiled mma
+            # 构造与 TiledMMA 所需 thread-value layout 匹配的 TiledCopy。
             tiled_copy_s2r_A = cute.make_tiled_copy_A(atom_copy_s2r_A, tiled_mma)
             tiled_copy_s2r_B = cute.make_tiled_copy_B(atom_copy_s2r_B, tiled_mma)
 
@@ -647,7 +590,7 @@ class TensorOpGemm:
             tCsB_copy_view = thr_copy_ldmatrix_B.partition_S(sB)
             tCrB_copy_view = thr_copy_ldmatrix_B.retile(tCrB)
 
-            # Current pipe index in smem to read from / write to
+            # smem 中要读取/写入的当前流水线索引
             smem_pipe_read = 0
             smem_pipe_write = num_smem_stages - 1
 
@@ -655,14 +598,14 @@ class TensorOpGemm:
             tCsB_p = tCsB_copy_view[None, None, None, smem_pipe_read]
 
             # ///////////////////////////////////////////////////////////////////////////////
-            # PREFETCH register pipeline
+            # 预取寄存器流水线
             # ///////////////////////////////////////////////////////////////////////////////
             num_k_block = cute.size(tCrA, mode=[2])
             if num_k_block > 1:
-                # Wait until our first prefetched tile is loaded in
+                # 等待第一个预取 tile 完成加载。
                 cute.arch.cp_async_wait_group(num_smem_stages - 2)
                 cute.arch.sync_threads()
-                # Prefetch the first k-block rmem from the first k-tile
+                # 从第一个 K tile 预取首个 K block 的 RMEM 片段
                 cute.copy(
                     tiled_copy_s2r_A,
                     tCsA_p[None, None, 0],
@@ -675,29 +618,22 @@ class TensorOpGemm:
                 )
 
             # ///////////////////////////////////////////////////////////////////////////////
-            # Mainloop
-            # 1. Shared memory pipeline (gmem -> smem):
-            #    The default smem pipeline depth is 3, meaning that for shared
-            # memory buffers, we allocate three times the size described by the
-            # CTA tiler. We prefetch 2 of these buffers before entering the main
-            # loop. Considering only the transfer from global memory to shared
-            # memory, the general structure of the mainloop is:
-            #   (1) copy k-tile from gmem to smem;
-            #   (2) perform gemm computation on k-tile;
-            #   (3) wait for the next copy to finish.
-            #    The `cute.arch.cp_async_wait_group(num_smem_stages - 2)` command
-            # waits for the number of unfinished 'copy' to be <= 1. The advantage
-            # of this approach is that it allows for simultaneous production
-            # (i.e., step (1)) and consumption (i.e., step (2)) of smem.
-            #    A common misconception is to prefetch N buffers and rewrite
-            # the pipeline logic to wait on N-1 pending copies. The disadvantage
-            # of this approach is that it requires fully consuming a buffer in
-            # order to open an empty buffer for the next copy.
-            # 2. Register pipeline (smem -> register):
-            #    Similarly, the register pipeline produces i+1, consumes i, and
-            # produces i+2... Notably, i and i+1 do not use the same register,
-            # eliminating dependencies on the same register for better parallelism.
-            # 3. Combining the smem and register pipelines results in the mainloop.
+            # 主循环
+            # 1.共享内存流水线（gmem -> smem）：
+            # 默认 SMEM 流水线深度为 3，因此分配的共享内存缓冲区总量
+            # 是 CTA tiler 所描述单级大小的三倍。进入主循环前先预取两级。
+            # 只考虑 GMEM→SMEM 搬运时，主循环结构如下：
+            # (1) 将 K tile 从 GMEM 拷贝到 SMEM；
+            # (2) 对 K tile 执行 GEMM 计算；
+            # (3) 等待下一次拷贝完成。
+            # `cute.arch.cp_async_wait_group(num_smem_stages - 2)` 命令
+            # 等待未完成的异步拷贝组数量不超过 1，使 SMEM 的生产与消费重叠。
+            # 不能简单预取 N 级后只等待 N-1 个未完成拷贝，因为必须先完整
+            # 消费某一级缓冲区，才能把它重新交给下一次拷贝。
+            # 2. 寄存器流水线（SMEM→RMEM）：
+            # 流水线在消费第 i 级时生产第 i+1 级，并继续准备第 i+2 级。
+            # 相邻级使用不同寄存器，减少寄存器数据依赖。
+            # 3. SMEM 流水线与寄存器流水线共同组成主循环。
             # ///////////////////////////////////////////////////////////////////////////////
             for k_tile in range(k_tile_count):
                 for k_block in cutlass.range(num_k_block, unroll_full=True):
@@ -707,8 +643,8 @@ class TensorOpGemm:
                         cute.arch.cp_async_wait_group(num_smem_stages - 2)
                         cute.arch.sync_threads()
 
-                    # Load A, B from shared memory to registers for k_block + 1
-                    k_block_next = (k_block + 1) % num_k_block  # static
+                    # 将 A、B 从 SMEM 加载到下一个 K block 的寄存器。
+                    k_block_next = (k_block + 1) % num_k_block  # 编译期静态值
                     cute.copy(
                         tiled_copy_s2r_A,
                         tCsA_p[None, None, k_block_next],
@@ -720,7 +656,7 @@ class TensorOpGemm:
                         tCrB_copy_view[None, None, k_block_next],
                     )
 
-                    # Fetch next A and B and update smem pipeline read/write
+                    # 取得下一组 A/B，并更新 SMEM 流水线的读写位置。
                     if k_block == 0:
                         if k_tile + num_smem_stages - 1 < k_tile_count:
                             cute.copy(
@@ -743,7 +679,7 @@ class TensorOpGemm:
                         if smem_pipe_read == num_smem_stages:
                             smem_pipe_read = 0
 
-                    # Thread-level register gemm for k_block
+                    # 对当前 K block 执行线程级寄存器 GEMM。
                     cute.gemm(
                         tiled_mma,
                         tCrC,
@@ -752,20 +688,20 @@ class TensorOpGemm:
                         tCrC,
                     )
 
-            # Sync before epilogue
+            # 进入 epilogue 前完成同步。
             cute.arch.cp_async_wait_group(0)
             cute.arch.sync_threads()
 
             # ///////////////////////////////////////////////////////////////////////////////
-            # Epilogue with fusion
+            # 融合 epilogue。
             # ///////////////////////////////////////////////////////////////////////////////
             tCrD = cute.make_fragment_like(tCrC, self.c_dtype)
             tCrD[None] = epilogue_op(tCrC.load()).to(self.c_dtype)
 
-            # Copy results of D back to shared memory
+            # 将 D 结果拷贝回共享内存。
             cute.autovec_copy(tCrD, tCsC)
 
-            # Create coord tensor for C
+            # 为 C 创建坐标 Tensor。
             ceilM, ceilN, _ = cute.ceil_div(mC.shape, (self.bM, self.bN, 1))
             mcC = cute.make_identity_tensor(
                 (
@@ -783,12 +719,11 @@ class TensorOpGemm:
             tCcC = thr_copy_C.partition_S(cC)
 
             tCrC_epilogue = cute.make_fragment_like(tCsC_epilogue)
-            # Wait for all writes to shared memory to finish before starting copies
-            # using the new layouts
+            # 等待共享内存写入全部完成，再使用新 Layout 开始拷贝。
             cute.arch.sync_threads()
             cute.autovec_copy(tCsC_epilogue, tCrC_epilogue)
 
-            # Create predication tensor for m
+            # 为 M 维创建谓词 Tensor。
             tCpC = cute.make_rmem_tensor(
                 cute.make_layout(
                     (
@@ -806,7 +741,7 @@ class TensorOpGemm:
                         tCcC[(0, rest_v), m, 0][0], mC.shape[0]
                     )
 
-            # Copy to global memory using better vectorization
+            # 使用更充分的向量化拷贝到全局内存。
             for rest_v in range(tCpC.shape[0]):
                 for n in range(tCpC.shape[2]):
                     if cute.elem_less(tCcC[(0, rest_v), 0, n][1], mC.shape[1]):
@@ -822,13 +757,13 @@ class TensorOpGemm:
         major_mode_size = (
             smem_tiler[1] if major_mode == utils.LayoutEnum.ROW_MAJOR else smem_tiler[0]
         )
-        # Cap at 128 bytes (fp16: 64 elems, fp8: 128 elems)
+        # 最大限制为 128 字节（FP16：64 个元素，FP8：128 个元素）
         max_elems = 128 * 8 // dtype.width
         major_mode_size = min(major_mode_size, max_elems)
 
         swizzle_bits = int(math.log2(major_mode_size * dtype.width // copy_bits))
         swizzle_bits = min(swizzle_bits, 3)
-        # PDSL: base_bits is in bytes (copy_bits / 8), not in elements
+        # PDSL：base_bits 以字节为单位（copy_bits / 8），而不是以元素为单位
         base_bits = int(math.log2(copy_bits // 8))
 
         shift_bits = int(math.log2(copy_bits // dtype.width))
@@ -861,9 +796,8 @@ class TensorOpGemm:
             layout_atom_outer,
         )
 
-        # Due to the thread layout of the mma, remove swizzle in C to
-        # prevent shared memory fragments owned by an single thread from
-        # holding swizzles
+        # 受 MMA 线程布局影响，需要移除 C 的 swizzle，避免单个线程持有的
+        # 共享内存 fragment 自身仍带有 swizzle。
         if major_mode == utils.LayoutEnum.COL_MAJOR:
             layout_atom = cute.make_composed_layout(
                 cute.make_swizzle(0, 3, 4), 0, layout_atom_outer
@@ -878,7 +812,7 @@ class TensorOpGemm:
     def _make_gmem_tiled_copy_AB(self, atom_copy, dtype, major_mode, copy_bits):
         copy_elems = copy_bits // dtype.width
         shape_dim_1 = cute.size(self.bK) // copy_elems
-        # thread layout for copy
+        # 拷贝使用的线程布局。
         thread_layout = cute.make_layout(
             (self.num_threads // shape_dim_1, shape_dim_1), stride=(shape_dim_1, 1)
         )
@@ -887,7 +821,7 @@ class TensorOpGemm:
             thread_layout = cute.make_layout(
                 (shape_dim_0, self.num_threads // shape_dim_0), stride=(1, shape_dim_0)
             )
-        # Value layout for copy
+        # 拷贝使用的值布局。
         value_layout = (
             cute.make_layout((1, copy_elems))
             if major_mode == utils.LayoutEnum.ROW_MAJOR
@@ -898,7 +832,7 @@ class TensorOpGemm:
     def _make_gmem_tiled_copy_C(self, atom_copy, dtype, major_mode, copy_bits):
         copy_elems = copy_bits // dtype.width
         shape_dim_1 = cute.size(self.bN) // copy_elems
-        # thread layout for copy
+        # 拷贝使用的线程布局。
         thread_layout = cute.make_layout(
             (self.num_threads // shape_dim_1, shape_dim_1), stride=(shape_dim_1, 1)
         )
@@ -929,27 +863,10 @@ def bmm(
     stream: cuda.CUstream,
     epilogue_op: cutlass.Constexpr = lambda x: x,
 ):
-    """
-    Wrapper API for GEMM kernel to follow the convention of PyTorch's batch matrix-multiply (bmm).
+    """按 PyTorch 批量矩阵乘法约定封装 GEMM kernel。
 
-    Internally, the tensors are permuted to match CuTe's convention:
-      - a: (m, k, l)
-      - b: (n, k, l)
-      - c: (m, n, l)
-
-    :param gemm_op: Kernel operation, expects (a, b, c, stream, epilogue_op)
-    :type gemm_op: cutlass.Constexpr
-    :param a: Input tensor of shape (l, m, k)
-    :type a: cute.Tensor
-    :param b: Input tensor of shape (l, k, n)
-    :type b: cute.Tensor
-    :param c: Output tensor of shape (l, m, n)
-    :type c: cute.Tensor
-    :param stream: CUDA stream for asynchronous execution
-    :type stream: cuda.CUstream
-    :param epilogue_op: Optional elementwise lambda function to apply per output element, defaults to identity
-    :type epilogue_op: cutlass.Constexpr, optional
-    """
+    函数内部把 a、b、c 从 PyTorch 的批次优先顺序转换为 CuTe 使用的
+    (m,k,l)、(n,k,l)、(m,n,l) 顺序，然后调用实际 GEMM。"""
     # (l,m,k) -> (m,k,l)
     a = cute.make_tensor(a.iterator, cute.select(a.layout, mode=[1, 2, 0]))
     # (l,k,n) -> (n,k,l)
@@ -970,27 +887,10 @@ def prepare_tensors(
     c_major: str,
     init_random: bool = True,
 ):
-    """
-    Prepare input and output tensors for the GEMM operation.
+    """准备 GEMM 的输入和输出 Tensor。
 
-    :param mnkl: Problem size as a tuple (M, N, K, L).
-    :type mnkl: Tuple[int, int, int, int]
-    :param ab_dtype: Data type for input tensors A and B.
-    :type ab_dtype: Type[cutlass.Numeric]
-    :param c_dtype: Data type for output tensor C.
-    :type c_dtype: Type[cutlass.Numeric]
-    :param a_major: Major dimension of the A tensor layout ("m" or "k").
-    :type a_major: str
-    :param b_major: Major dimension of the B tensor layout ("n" or "k").
-    :type b_major: str
-    :param c_major: Major dimension of the C tensor layout ("m" or "n").
-    :type c_major: str
-    :param init_random: Whether to initialize tensors with random values, defaults to True.
-    :type init_random: bool, optional
-
-    :return: Tuple of (a, b, c) torch tensors.
-    :rtype: Tuple[torch.Tensor, torch.Tensor, torch.Tensor]
-    """
+    根据 MNKL、数据类型和 major 模式创建 GPU Tensor；FP8 使用 uint8
+    作为底层存储，并额外保留 FP32 数据供量化和参考计算使用。"""
     import torch
     from cutlass.torch import dtype as torch_dtype
 
@@ -1016,7 +916,7 @@ def prepare_tensors(
         b.random_(-2, 3)
         c.random_(-2, 3)
 
-    # For fp8 types, use uint8 as storage to avoid dlpack limitation
+    # 对于 FP8 类型，使用 uint8 作为底层存储，以规避 DLPack 限制。
     a_storage_dtype = torch.uint8 if is_fp8_dtype(ab_dtype) else torch_dtype(ab_dtype)
     b_storage_dtype = torch.uint8 if is_fp8_dtype(ab_dtype) else torch_dtype(ab_dtype)
     c_storage_dtype = torch.uint8 if is_fp8_dtype(c_dtype) else torch_dtype(c_dtype)
@@ -1025,9 +925,9 @@ def prepare_tensors(
         a.to(dtype=a_storage_dtype),
         b.to(dtype=b_storage_dtype),
         c.to(dtype=c_storage_dtype),
-        a.clone(),  # fp32 source for fp8 conversion
-        b.clone(),  # fp32 source for fp8 conversion
-        c.clone(),  # fp32 source for fp8 conversion
+        a.clone(),  # 用于 fp8 转换的 fp32 源
+        b.clone(),  # 用于 fp8 转换的 fp32 源
+        c.clone(),  # 用于 fp8 转换的 fp32 源
     )
 
 
@@ -1078,30 +978,9 @@ def compile_bmm(
     atom_layout_mnk: Tuple[int, int, int],
     epilogue_op: cutlass.Constexpr = lambda x: x,
 ):
-    """
-    Compile the BMM kernel with caching.
+    """编译并缓存 BMM kernel。
 
-    :param mnkl: Problem size as a tuple (M, N, K, L).
-    :type mnkl: Tuple[int, int, int, int]
-    :param a: Input tensor A.
-    :type a: cute.Tensor
-    :param b: Input tensor B.
-    :type b: cute.Tensor
-    :param c: Output tensor C.
-    :type c: cute.Tensor
-    :param ab_dtype: Data type for input tensors A and B.
-    :type ab_dtype: Type[cutlass.Numeric]
-    :param c_dtype: Data type for output tensor C.
-    :type c_dtype: Type[cutlass.Numeric]
-    :param acc_dtype: Accumulator data type.
-    :type acc_dtype: Type[cutlass.Numeric]
-    :param atom_layout_mnk: Atom layout shape (M, N, K).
-    :type atom_layout_mnk: Tuple[int, int, int]
-    :param epilogue_op: Optional elementwise lambda function to apply to the output tensor.
-    :type epilogue_op: cutlass.Constexpr, optional
-
-    :return: Compiled kernel function.
-    """
+    返回固定的 JIT Executor；缓存大小为 1，用于复用相同配置的编译结果。"""
     from cutlass.cute.runtime import make_fake_stream
 
     stream = make_fake_stream()
@@ -1128,56 +1007,21 @@ def run(
     benchmark: bool = False,
     **kwargs,
 ):
-    """
-    Execute an Ampere tensor core GEMM operation with performance benchmarking.
+    """运行 Ampere Tensor Core GEMM，并按需执行参考结果校验和性能测试。
 
-    Prepares input tensors, configures and launches the GEMM kernel,
-    optionally performs reference validation, and benchmarks execution.
-
-    :param mnkl: Problem size as a tuple (M, N, K, L).
-    :type mnkl: Tuple[int, int, int, int]
-    :param ab_dtype: Data type for input tensors A and B.
-    :type ab_dtype: Type[cutlass.Numeric]
-    :param c_dtype: Data type for output tensor C.
-    :type c_dtype: Type[cutlass.Numeric]
-    :param acc_dtype: Accumulator data type for the matrix multiplication.
-    :type acc_dtype: Type[cutlass.Numeric]
-    :param a_major: Major dimension of the A tensor layout ("m" or "k").
-    :type a_major: str
-    :param b_major: Major dimension of the B tensor layout ("n" or "k").
-    :type b_major: str
-    :param c_major: Major dimension of the C tensor layout ("m" or "n").
-    :type c_major: str
-    :param atom_layout_mnk: Atom layout shape (M, N, K).
-    :type atom_layout_mnk: Tuple[int, int, int]
-    :param tolerance: Tolerance for reference validation, defaults to 1e-03.
-    :type tolerance: float, optional
-    :param warmup_iterations: Number of warmup iterations before benchmarking, defaults to 2.
-    :type warmup_iterations: int, optional
-    :param iterations: Number of benchmark iterations to run, defaults to 100.
-    :type iterations: int, optional
-    :param skip_ref_check: Whether to skip reference result validation, defaults to False.
-    :type skip_ref_check: bool, optional
-    :param use_cold_l2: Whether to use circular buffer strategy to ensure cold L2 cache, defaults to False.
-    :type use_cold_l2: bool, optional
-    :param benchmark: Whether to only benchmark the kernel, defaults to False.
-    :type benchmark: bool, optional
-    :raises RuntimeError: If CUDA GPU is not available.
-    :return: Execution time of the GEMM kernel.
-    :rtype: float
-    """
+    返回值为每次迭代的执行时间，单位为微秒；关闭 benchmark 时返回 0。"""
     import torch
     from cutlass.torch import dtype as torch_dtype
 
     if not torch.cuda.is_available():
-        raise RuntimeError("GPU is required to run this example!")
+        raise RuntimeError("运行本示例需要 NVIDIA GPU！")
 
-    # Get current CUDA stream from PyTorch
+    # 从 PyTorch 获取当前 CUDA 流
     torch_stream = torch.cuda.current_stream()
-    # Get the raw stream pointer as a CUstream
+    # 获取 CUstream 形式的原始流指针
     current_stream = cuda.CUstream(torch_stream.cuda_stream)
 
-    # Run and verify BMM with torch
+    # 使用 PyTorch 运行并验证 BMM。
     a, b, c, a_f32, b_f32, c_f32 = prepare_tensors(
         mnkl, ab_dtype, c_dtype, a_major, b_major, c_major
     )
@@ -1212,21 +1056,21 @@ def run(
         epilogue_op=lambda x: x,
     )
 
-    print("Running Ampere tensor core GEMM test with:")
-    print(f"mnkl: {mnkl}")
-    print(f"Tolerance: {tolerance}")
-    print(f"Warmup iterations: {warmup_iterations}")
-    print(f"Iterations: {iterations}")
-    print(f"Skip reference checking: {skip_ref_check}")
-    print(f"Use cold L2: {'True' if use_cold_l2 else 'False'}")
+    print("使用以下配置运行 Ampere Tensor Core GEMM 测试：")
+    print(f"问题规模 MNKL：{mnkl}")
+    print(f"容差：{tolerance}")
+    print(f"预热迭代次数：{warmup_iterations}")
+    print(f"迭代次数：{iterations}")
+    print(f"跳过参考结果检查：{'是' if skip_ref_check else '否'}")
+    print(f"使用冷 L2：{'是' if use_cold_l2 else '否'}")
 
     if not skip_ref_check:
-        # Use small random number for deterministic result for reference check
+        # 使用范围较小的随机数，获得稳定的参考检查结果。
         compiled_fn(a_, b_, c_, current_stream)
 
-        # Manually quantize to be comparable
-        # For fp8 types, use f32 source tensors for reference computation
-        # since a/b/c may be stored as uint8
+        # 手动量化以便比较。
+        # FP8 路径使用 FP32 源 Tensor 做参考计算，因为 a/b/c 可能以
+        # uint8 作为底层存储。
         a_ref = a_f32 if is_fp8_dtype(ab_dtype) else a
         b_ref = b_f32 if is_fp8_dtype(ab_dtype) else b
         ref = (
@@ -1277,7 +1121,7 @@ def run(
             one_workspace_bytes, warmup_iterations, iterations
         )
 
-    # Return execution time in microseconds
+    # 返回执行时间（以微秒为单位）
     exec_time = testing.benchmark(
         compiled_fn,
         workspace_generator=generate_tensors,
@@ -1286,7 +1130,7 @@ def run(
         warmup_iterations=warmup_iterations,
         iterations=iterations,
     )
-    print(f"[DSL INFO] Execution time: {exec_time} microseconds per iteration")
+    print(f"[DSL 信息] 执行时间：{exec_time} 微秒/次迭代")
     return exec_time
 
 
@@ -1295,24 +1139,24 @@ def _parse_comma_separated_ints(s: str) -> Tuple[int, ...]:
         return tuple(int(x.strip()) for x in s.split(","))
     except ValueError:
         raise argparse.ArgumentTypeError(
-            "Invalid format. Expected comma-separated integers."
+            "格式无效，应为逗号分隔的整数。"
         )
 
 
 def prepare_parser():
-    parser = argparse.ArgumentParser(description="Example of Dense GEMM on Ampere.")
+    parser = argparse.ArgumentParser(description="Ampere Dense GEMM 示例。")
 
     parser.add_argument(
         "--mnkl",
         type=_parse_comma_separated_ints,
         default=(256, 256, 512, 1),
-        help="mnkl dimensions (comma-separated)",
+        help="MNKL 维度，以逗号分隔",
     )
     parser.add_argument(
         "--atom_layout_mnk",
         type=_parse_comma_separated_ints,
         default=(2, 2, 1),
-        help="Atom layout (comma-separated)",
+        help="Atom layout，以逗号分隔",
     )
     parser.add_argument("--ab_dtype", type=cutlass.dtype, default=cutlass.Float16)
     parser.add_argument("--c_dtype", type=cutlass.dtype, default=cutlass.Float16)
@@ -1321,32 +1165,32 @@ def prepare_parser():
     parser.add_argument("--b_major", choices=["k", "n"], type=str, default="n")
     parser.add_argument("--c_major", choices=["n", "m"], type=str, default="n")
     parser.add_argument(
-        "--tolerance", type=float, default=1e-03, help="Tolerance for validation"
+        "--tolerance", type=float, default=1e-03, help="结果验证容差"
     )
     parser.add_argument(
         "--benchmark",
         type=str,
         default="default",
         choices=["default", "none"],
-        help="Benchmark the kernel with default (cutlass.testing.benchmark) or none",
+        help="使用 default（cutlass.testing.benchmark）测试 kernel，或用 none 关闭测试",
     )
     parser.add_argument(
-        "--warmup_iterations", type=int, default=2, help="Warmup iterations"
+        "--warmup_iterations", type=int, default=2, help="预热迭代次数"
     )
     parser.add_argument(
         "--iterations",
         type=int,
         default=100,
-        help="Number of iterations to run the kernel",
+        help="运行 kernel 的迭代次数",
     )
     parser.add_argument(
-        "--skip_ref_check", action="store_true", help="Skip reference checking"
+        "--skip_ref_check", action="store_true", help="跳过参考结果检查"
     )
     parser.add_argument(
         "--use_cold_l2",
         action="store_true",
         default=False,
-        help="Use circular buffer tensor sets to ensure L2 cold cache",
+        help="使用循环缓冲 Tensor 集合维持冷 L2 cache",
     )
 
     return parser
@@ -1358,19 +1202,20 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     if len(args.mnkl) != 4:
-        parser.error("--mnkl must contain exactly 4 values")
+        parser.error("--mnkl 必须恰好包含 4 个值")
 
     if len(args.atom_layout_mnk) != 3:
-        parser.error("--atom_layout_mnk must contain exactly 3 values")
+        parser.error("--atom_layout_mnk 必须恰好包含 3 个值")
 
-    print("[DSL INFO] Compiling Ampere Dense GEMM with:")
+    print("[DSL 信息] 使用以下配置编译 Ampere Dense GEMM：")
     print(
-        f"[DSL INFO] A dtype: {args.ab_dtype}, B dtype: {args.ab_dtype}, C dtype: {args.c_dtype}, Acc dtype: {args.acc_dtype}"
+        f"[DSL 信息] A 数据类型：{args.ab_dtype}，B 数据类型：{args.ab_dtype}，"
+        f"C 数据类型：{args.c_dtype}，累加器数据类型：{args.acc_dtype}"
     )
     print(
-        f"[DSL INFO] Matrix majors - A: {args.a_major}, B: {args.b_major}, C: {args.c_major}"
+        f"[DSL 信息] 矩阵主序 - A：{args.a_major}，B：{args.b_major}，C：{args.c_major}"
     )
-    print(f"[DSL INFO] Atom layout (M, N, K): {args.atom_layout_mnk}")
+    print(f"[DSL 信息] Atom layout（M、N、K）：{args.atom_layout_mnk}")
 
     run(
         args.mnkl,
@@ -1388,4 +1233,4 @@ if __name__ == "__main__":
         args.use_cold_l2,
         args.benchmark == "default",
     )
-    print("PASS")
+    print("运行通过")

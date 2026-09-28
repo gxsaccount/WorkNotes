@@ -5,16 +5,19 @@
 >
 > 同步日期：2026-09-28
 
-本章不再只保留导读，同时收录三份未经改写的官方源码：
+本章不再只保留导读，同时收录三份基于官方源码制作的中文注释版：
 
-| 架构 | 本地源码 | 官方路径 | SHA-256 |
+| 架构 | 本地源码 | 官方路径 | 上游原文件 SHA-256 |
 |---|---|---|---|
-| Ampere Warp MMA | [`../01-WMMA/代码实验/tensorop_gemm.py`](../01-WMMA/代码实验/tensorop_gemm.py) | `examples/python/CuTeDSL/cute/ampere/kernel/dense_gemm/tensorop_gemm.py` | `ed7eca473c66a3a3ded741eb4ee30757b4b944d5d360e4023ad6be7ba225b21c` |
-| Hopper WGMMA | [`../02-WGMMA/代码实验/dense_gemm.py`](../02-WGMMA/代码实验/dense_gemm.py) | `examples/python/CuTeDSL/cute/hopper/kernel/dense_gemm/dense_gemm.py` | `bb7b76d893219757e2f3701abf1a7c8c819b9966e38aaed30a768596a55aca9f` |
-| Blackwell TCGen05 | [`../03-TCGen05/代码实验/fp16_gemm_0.py`](../03-TCGen05/代码实验/fp16_gemm_0.py) | `examples/python/CuTeDSL/cute/blackwell/tutorial/tutorial_gemm/fp16_gemm_0.py` | `a15471df9a2a9c80a6a772416210ea256a58b142aa4b6358ca01851f6f02362a` |
+| Ampere Warp MMA | [`../01-WMMA/代码实验/tensorop_gemm.py`](../01-WMMA/代码实验/tensorop_gemm.py) | [英文原版](https://github.com/NVIDIA/cutlass/blob/098de2a652cf8f00fd70b2df54051c7eccbb855a/examples/python/CuTeDSL/cute/ampere/kernel/dense_gemm/tensorop_gemm.py) | `ed7eca473c66a3a3ded741eb4ee30757b4b944d5d360e4023ad6be7ba225b21c` |
+| Hopper WGMMA | [`../02-WGMMA/代码实验/dense_gemm.py`](../02-WGMMA/代码实验/dense_gemm.py) | [英文原版](https://github.com/NVIDIA/cutlass/blob/098de2a652cf8f00fd70b2df54051c7eccbb855a/examples/python/CuTeDSL/cute/hopper/kernel/dense_gemm/dense_gemm.py) | `bb7b76d893219757e2f3701abf1a7c8c819b9966e38aaed30a768596a55aca9f` |
+| Blackwell TCGen05 | [`../03-TCGen05/代码实验/fp16_gemm_0.py`](../03-TCGen05/代码实验/fp16_gemm_0.py) | [英文原版](https://github.com/NVIDIA/cutlass/blob/098de2a652cf8f00fd70b2df54051c7eccbb855a/examples/python/CuTeDSL/cute/blackwell/tutorial/tutorial_gemm/fp16_gemm_0.py) | `a15471df9a2a9c80a6a772416210ea256a58b142aa4b6358ca01851f6f02362a` |
 
-源码保留 NVIDIA BSD-3-Clause 许可证头。为保证能与教程逐行对照，没有修改
-kernel、命令行参数或默认配置；小规模 smoke 参数由独立运行脚本提供。
+源码保留 NVIDIA BSD-3-Clause 英文许可证原文，并在每个文件头部标明固定
+commit 的英文原版链接。许可证文字、代码标识符、公开 API、命令行参数和
+数据类型名称不能翻译；其余英文注释、文档字符串、帮助文本、报错与运行提示
+均已翻译为中文。kernel 逻辑和默认配置未修改，小规模冒烟测试参数由独立
+运行脚本提供。
 
 ## 1. 环境要求
 
@@ -54,7 +57,8 @@ python3 11-Architecture-MMA/代码实验/tests/validate_sources.py
 
 该测试会检查：
 
-- 两份源码的固定 SHA-256；
+- 三份源码的计算代码结构与关键架构 API；
+- 每份源码中的固定 commit 英文原版链接；
 - Python 语法；
 - WGMMA/TCGen05 核心 API 标记；
 - 运行脚本的 Bash 语法。
@@ -99,7 +103,7 @@ bash 11-Architecture-MMA/代码实验/run_wgmma.sh \
   --iterations 20
 ```
 
-脚本保留 reference check，只有源码最终打印 `PASS` 才算运行成功。
+脚本保留参考结果检查，只有源码最终打印“运行通过”才算运行成功。
 
 ## 5. Blackwell TCGen05
 
@@ -123,7 +127,7 @@ bash 11-Architecture-MMA/代码实验/run_tcgen05.sh \
   --mnk 8192,8192,8192
 ```
 
-脚本保留 PyTorch reference check，只有源码最终打印 `PASS` 才算运行成功。
+脚本保留 PyTorch 参考结果检查，只有源码最终打印“运行通过”才算运行成功。
 
 ## 6. 验证状态
 

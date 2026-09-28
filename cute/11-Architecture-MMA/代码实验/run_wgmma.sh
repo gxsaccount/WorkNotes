@@ -6,7 +6,7 @@ SOURCE="$SCRIPT_DIR/../02-WGMMA/代码实验/dense_gemm.py"
 PYTHON_BIN="${PYTHON:-python3}"
 
 if ! command -v nvidia-smi >/dev/null 2>&1; then
-  echo "ERROR: nvidia-smi not found; Hopper SM90 GPU is required." >&2
+  echo "错误：未找到 nvidia-smi；需要 Hopper SM90 GPU。" >&2
   exit 1
 fi
 
@@ -16,12 +16,12 @@ compute_cap="$(
     tr -d '[:space:]'
 )"
 if [[ "$compute_cap" != 9.* ]]; then
-  echo "ERROR: WGMMA example requires Hopper SM90/SM90a; detected compute capability $compute_cap." >&2
+  echo "错误：WGMMA 示例需要 Hopper SM90/SM90a，检测到的计算能力为 $compute_cap。" >&2
   exit 1
 fi
 
 "$PYTHON_BIN" -c \
-  'import cutlass, torch; import cuda.bindings.driver; print("CuTe DSL imports: PASS")'
+  'import cutlass, torch; import cuda.bindings.driver; print("CuTe DSL 依赖导入：通过")'
 
 if [[ "$#" -eq 0 ]]; then
   set -- \

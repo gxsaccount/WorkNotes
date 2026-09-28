@@ -6,7 +6,7 @@ SOURCE="$SCRIPT_DIR/../01-WMMA/代码实验/tensorop_gemm.py"
 PYTHON_BIN="${PYTHON:-python3}"
 
 if ! command -v nvidia-smi >/dev/null 2>&1; then
-  echo "ERROR: nvidia-smi not found; an Ampere SM80-class GPU is required." >&2
+  echo "错误：未找到 nvidia-smi；需要 Ampere SM80 系列 GPU。" >&2
   exit 1
 fi
 
@@ -16,12 +16,12 @@ compute_cap="$(
     tr -d '[:space:]'
 )"
 if [[ "$compute_cap" != 8.* ]]; then
-  echo "ERROR: this tutorial runner targets Ampere SM8x; detected compute capability $compute_cap." >&2
+  echo "错误：本教程面向 Ampere SM8x，检测到的计算能力为 $compute_cap。" >&2
   exit 1
 fi
 
 "$PYTHON_BIN" -c \
-  'import cutlass, torch; import cuda.bindings.driver; print("CuTe DSL imports: PASS")'
+  'import cutlass, torch; import cuda.bindings.driver; print("CuTe DSL 依赖导入：通过")'
 
 if [[ "$#" -eq 0 ]]; then
   set -- \

@@ -1,7 +1,7 @@
 # Blackwell TCGen05 官方 Python 示例导读
 
 > 官方教程目录：
-> [`examples/python/CuTeDSL/cute/blackwell/tutorial/tutorial_gemm/`](https://github.com/NVIDIA/cutlass/tree/main/examples/python/CuTeDSL/cute/blackwell/tutorial/tutorial_gemm)
+> [`examples/python/CuTeDSL/cute/blackwell/tutorial/tutorial_gemm/`](https://github.com/NVIDIA/cutlass/tree/098de2a652cf8f00fd70b2df54051c7eccbb855a/examples/python/CuTeDSL/cute/blackwell/tutorial/tutorial_gemm)
 >
 > 本地源码：[代码实验/fp16_gemm_0.py](代码实验/fp16_gemm_0.py)
 >
