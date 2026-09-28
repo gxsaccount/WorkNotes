@@ -1,22 +1,360 @@
-# 09 TMA Tensors：把 CuTe View 坐标映射回原 Tensor 坐标
+# 09 TMA Tensors：看懂 TMA 坐标计算器
 
 > 官方对应：`media/docs/cpp/cute/0z_tma_tensors.md`
 >
 > 官方基线：NVIDIA CUTLASS `main`，文档最近一次修改提交
 > `0d2b201e8c1c4a03efa6e9c468161916e2334725`，核对日期 2026-09-24
 >
-> 前置章节：[Tensor](../04-Tensor/04-Tensor.md)、
-> [Layout Algebra](../03-Layout-Algebra/03-Layout-Algebra.md) 与
-> [Predication](../08-Predication/08-Predication.md)
+> 本地整理：2026-09-28
 
-## 本章要回答的问题
+## 1. 先看构造代码
 
-**TMA Tensor 的作用，是把经过 CuTe tile、reshape 或 partition 等变换后的
-view 坐标，映射回 TMA descriptor 所描述的原 Tensor 逻辑坐标。**
+官方教程只展示了目标打印结果，没有给出生成它的完整代码。根据打印中的
+Iterator、Shape 和 Stride，可以写出下面的等价构造：
 
-**TMA coordinate 就是 TMA descriptor 所描述 Tensor 的逻辑下标。**
+```cpp
+auto tensor =
+    make_tensor(
+        make_inttuple_iter(
+            0, Int<0>{}, Int<0>{}, Int<0>{}),
 
-假设 descriptor 描述二维矩阵：
+        make_shape(
+            make_shape(Int<128>{}, Int<64>{}),
+            2, 3, 1),
+
+        make_stride(
+            make_stride(E<0>{}, E<1>{}),
+            Int<64>{} * E<1>{},
+            E<2>{},
+            E<3>{}));
+
+print(tensor);
+print("\n");
+```
+
+这里使用 `print(tensor)` 打印 Tensor 的结构。`print_tensor(tensor)` 会尝试枚举
+Tensor 中的坐标值，不只是打印结构。
+
+---
+
+## 2. 这段代码有什么作用
+
+这段代码构造的是一个**坐标计算器**，不是保存矩阵数据的 Tensor。
+
+它接收当前 CuTe view 中的逻辑坐标：
+
+```text
+((i,j),k,l,m)
+```
+
+然后计算出：
+
+```text
+(i, j + 64*k, l, m)
+```
+
+在 TMA load/store 中，这个输出表示 TMA descriptor 所描述的原 Tensor 逻辑坐标，
+用于告诉硬件：
+
+```text
+“从原 Tensor 的这个逻辑位置开始搬数据。”
+```
+
+三组构造参数的职责是：
+
+```text
+make_inttuple_iter(...)：定义输出坐标的起点
+make_shape(...)：        定义允许输入的逻辑坐标范围
+make_stride(...)：       定义输入坐标到输出坐标的换算规则
+```
+
+---
+
+## 3. `print(tensor)` 的结果
+
+```text
+ArithTuple(0,_0,_0,_0) o
+((_128,_64),2,3,1):((_1@0,_1@1),_64@1,_1@2,_1@3)
+```
+
+它与构造代码一一对应：
+
+```text
+make_inttuple_iter(...) → ArithTuple(0,_0,_0,_0)
+make_shape(...)         → ((_128,_64),2,3,1)
+make_stride(...)        → ((_1@0,_1@1),_64@1,_1@2,_1@3)
+```
+
+---
+
+## 4. 打印结果中各部分的作用
+
+```text
+ArithTuple(0,_0,_0,_0)   o   ((_128,_64),2,3,1) : ((_1@0,_1@1),_64@1,_1@2,_1@3)
+─────────────────────         ─────────────────    ─────────────────────────────
+       ① 起点                       ② 形状                    ③ 怎么走
+```
+
+### 4.1 ① `ArithTuple(0,_0,_0,_0)`：输出坐标的起点
+
+它表示输出坐标从：
+
+```text
+(0,0,0,0)
+```
+
+开始。
+
+更准确地说：
+
+```text
+ArithmeticTuple：        一个可以进行算术运算的坐标 tuple
+ArithmeticTupleIterator：保存和移动这个坐标的 iterator
+```
+
+打印中的 `ArithTuple(...)` 表示 iterator 当前保存的坐标值。
+
+`_0` 是 CuTe 的编译期整数 `Int<0>`。它和普通 `0` 的数值相同，但类型不同。
+
+### 4.2 ② `((_128,_64),2,3,1)`：输入坐标的 Shape
+
+这是坐标计算器能够接收的逻辑坐标 Shape：
+
+```text
+mode-0 = (128,64)
+mode-1 = 2
+mode-2 = 3
+mode-3 = 1
+```
+
+其中 mode-0 自身又包含两个子 mode，所以输入坐标写成：
+
+```text
+((i,j),k,l,m)
+```
+
+各分量范围为：
+
+```text
+i ∈ [0,128)
+j ∈ [0, 64)
+k ∈ [0,  2)
+l ∈ [0,  3)
+m ∈ [0,  1)
+```
+
+它不是“先分成 2 份，再分成 3 份”的操作过程，而是一个嵌套 Shape。
+
+### 4.3 ③ `((_1@0,_1@1),_64@1,_1@2,_1@3)`：坐标换算规则
+
+普通 CuTe Stride 通常表示：
+
+```text
+一个输入坐标增加 1，整数 offset 增加多少。
+```
+
+这里的 Basis stride 表示：
+
+```text
+一个输入坐标增加 1，输出逻辑坐标的哪个方向增加多少。
+```
+
+`@` 后面的数字是输出方向编号，从 0 开始。
+
+| 输入逻辑维度 | Stride | 意思 |
+|---|---|---|
+| mode-0 的子维 0，大小 128 | `_1@0` | 走一步，输出第 0 个方向 `+1` |
+| mode-0 的子维 1，大小 64 | `_1@1` | 走一步，输出第 1 个方向 `+1` |
+| mode-1，大小 2 | `_64@1` | 走一步，输出第 1 个方向 `+64` |
+| mode-2，大小 3 | `_1@2` | 走一步，输出第 2 个方向 `+1` |
+| mode-3，大小 1 | `_1@3` | 走一步，输出第 3 个方向 `+1` |
+
+可以直接把它读成：
+
+```text
+1@0：把对应输入放到输出坐标第 0 维
+1@1：把对应输入放到输出坐标第 1 维
+64@1：把对应输入乘 64，再放到输出坐标第 1 维
+1@2：把对应输入放到输出坐标第 2 维
+1@3：把对应输入放到输出坐标第 3 维
+```
+
+#### 逐行解释 `make_stride`
+
+代码：
+
+```cpp
+make_stride(
+    make_stride(E<0>{}, E<1>{}),
+    Int<64>{} * E<1>{},
+    E<2>{},
+    E<3>{})
+```
+
+它必须和 Shape 的层级结构对齐：
+
+```cpp
+make_shape(
+    make_shape(Int<128>{}, Int<64>{}),
+    2,
+    3,
+    1)
+```
+
+对应关系为：
+
+```text
+Shape  = ((128,64), 2,    3,   1)
+Stride = ((1@0,1@1),64@1,1@2,1@3)
+```
+
+因此输入坐标为：
+
+```text
+((i,j),k,l,m)
+```
+
+每一项的含义如下。
+
+##### `make_stride(E<0>{}, E<1>{})`
+
+它对应 Shape 中嵌套的第一个 mode：
+
+```text
+(128,64)
+```
+
+其中：
+
+```text
+E<0>{} = 1@0 ≈ (1,0,0,0)
+E<1>{} = 1@1 ≈ (0,1,0,0)
+```
+
+所以：
+
+```text
+i * E<0>{} → (i,0,0,0)
+j * E<1>{} → (0,j,0,0)
+```
+
+##### `Int<64>{} * E<1>{}`
+
+它对应输入坐标 `k`：
+
+```text
+k * (64@1) → (0,64*k,0,0)
+```
+
+`j` 和 `k` 都写入输出坐标第 1 维，因此会相加：
+
+```text
+输出第 1 维 = j + 64*k
+```
+
+这里的 `64` 正好是 `j` 所在 mode 的大小。可以把 `(j,k)` 理解成：
+
+```text
+j：一个 64 元素分块中的位置
+k：选择第几个 64 元素分块
+```
+
+所以将它们还原为原 Tensor 坐标时：
+
+```text
+original_j = j + 64*k
+```
+
+##### `E<2>{}`
+
+它对应输入坐标 `l`：
+
+```text
+l * E<2>{} → (0,0,l,0)
+```
+
+即直接把 `l` 放入输出坐标第 2 维。
+
+##### `E<3>{}`
+
+它对应输入坐标 `m`：
+
+```text
+m * E<3>{} → (0,0,0,m)
+```
+
+即直接把 `m` 放入输出坐标第 3 维。
+
+##### 最终相加
+
+```text
+(i,0,0,0)
++ (0,j,0,0)
++ (0,64*k,0,0)
++ (0,0,l,0)
++ (0,0,0,m)
+= (i, j + 64*k, l, m)
+```
+
+---
+
+## 举个具体例子
+
+假设输入逻辑坐标为：
+
+```text
+((i=2,j=3),k=1,l=0,m=0)
+```
+
+按规则计算：
+
+```text
+i=2 → 输出第 0 个方向 +2
+j=3 → 输出第 1 个方向 +3
+k=1 → 输出第 1 个方向 +64×1
+l=0 → 输出第 2 个方向 +0
+m=0 → 输出第 3 个方向 +0
+```
+
+最终坐标为：
+
+```text
+(2,67,0,0)
+```
+
+因为：
+
+```text
+67 = 3 + 64×1
+```
+
+所以整行打印表达的完整映射就是：
+
+```text
+输入：((i,j),k,l,m)
+输出：(i, j + 64*k, l, m)
+```
+
+这就是它的全部工作。
+
+---
+
+## 为什么需要这东西
+
+在 Hopper 及后续 GPU 上使用 TMA 搬数据时：
+
+1. 原 Tensor 在显存中的基址、Shape 和 Stride 由 TMA descriptor 描述；
+2. 本次从原 Tensor 的哪个逻辑位置开始搬，由 TMA coordinate 指定。
+
+TMA 一次可以搬运整个多维 tile，不需要每个线程分别计算每个元素的 GMEM 地址。
+官方教程还特别说明：
+
+- descriptor 可以描述 1～5 维 Tensor；
+- descriptor 中还包含元素类型、SMEM box、swizzle 和越界行为等配置；
+- descriptor 在 kernel 启动前由 host 创建；
+- 多个 CTA 可以使用同一个 descriptor。
+
+假设 descriptor 描述矩阵：
 
 ```text
 A[M,N]
@@ -28,707 +366,337 @@ A[M,N]
 TMA coordinate = (m,n)
 ```
 
-表示本次 TMA 搬运从 `A(m,n)` 开始。它通常是待搬运 tile 在 global-memory
-Tensor 中的起始坐标。
-
-有了这个定义，再看它与常见 CuTe Tensor 的区别。对于以 GMEM pointer 为
-Iterator 的 CuTe Tensor，Layout 计算线性
-offset，Iterator 再用这个 offset 定位数据：
+就是原 Tensor 的逻辑位置：
 
 ```text
-逻辑坐标 → Layout → 线性 offset → GMEM pointer 指向的元素
+A(m,n)
 ```
 
-TMA 的接口不同：GMEM 基址和 Stride 已经记录在 descriptor 中，指令执行时需要
-额外提供的是 **descriptor 所描述的原始 Tensor 的逻辑坐标**：
-
-```text
-TMA descriptor + 原始 Tensor 逻辑坐标 → 本次搬运的 GMEM tile
-```
-
-因此本章真正的问题是：CuTe 如何实现这个坐标映射？
-
-答案分三步：
-
-```text
-Implicit Tensor
-    ↓
-ArithmeticTupleIterator
-    ↓
-Basis stride
-```
-
-理解这三步后，就能看懂下面的 TMA Tensor：
-
-```text
-ArithTuple(0,_0,_0,_0) o
-((_128,_64),2,3,1):((_1@0,_1@1),_64@1,_1@2,_1@3)
-```
-
----
-
-## 1. TMA 指令需要什么
-
-Hopper 引入的 Tensor Memory Accelerator（TMA）可以在 global memory 和
-shared memory 之间搬运一个多维 tile。
-
-TMA 指令依赖三类输入：
-
-```text
-TMA descriptor
-SMEM 地址
-GMEM Tensor 中的多维坐标
-```
-
-### 1.1 TMA descriptor
-
-Descriptor 描述完整的 global-memory Tensor，包括：
-
-- global-memory 基址；
-- 元素类型；
-- 1～5 个维度的大小；
-- 各维度的 Stride；
-- shared-memory box；
-- swizzle 和越界行为等配置。
-
-它在 kernel 启动前由 host 创建。
-
-### 1.2 TMA coordinate
-
-Descriptor 说明“整个 Tensor 如何存储”，coordinate 说明“本次从哪里开始搬”。
-
-第 0 节已经给出了基本定义。这里还要进一步区分两个逻辑坐标系：
-
-如果当前 CuTe view 没有经过任何坐标变换，那么二者确实相同：
-
-```text
-CuTe view 坐标 (m,n) → TMA descriptor 坐标 (m,n)
-```
-
-但经过 tiling 或 mode 合并后，当前 view 的坐标可能是：
-
-```text
-((i,j),k)
-```
-
-而 descriptor 仍要求原始二维坐标：
-
-```text
-(i, j + 64*k)
-```
-
-因此 TMA Tensor 的作用不是创造一种不同于逻辑坐标的新概念，而是在两个逻辑
-坐标系之间做映射：
-
-```text
-当前 CuTe view 的逻辑坐标
-        ↓
-descriptor 原始 Tensor 的逻辑坐标
-```
-
-以三维 TMA store 的接口形态为例：
-
-```cpp
-copy(desc_ptr,
-     smem_ptr,
-     crd0,
-     crd1,
-     crd2);
-```
-
-注意这里没有单独传入 GMEM pointer，因为 global-memory 基址已经包含在 descriptor
-中。TMA 指令需要的是 descriptor 坐标，而不是一个重新计算出的数据指针。
-
----
-
-## 2. Pointer Tensor 与 TMA 接口有什么不同
-
-常见的 pointer-backed CuTe Tensor 可以近似理解为：
-
-```text
-Tensor = Iterator o Layout
-```
-
-对于普通 global-memory Tensor：
-
-```text
-Iterator = GMEM pointer
-Layout   = 逻辑坐标到整数 offset 的映射
-```
-
-访问 `(i,j)` 时：
-
-```text
-(i,j)
-  ↓ Layout
-integer offset
-  ↓ pointer + offset
-GMEM address
-```
-
-例如：
-
-```text
-shape  = (M,N)
-stride = (1,M)
-
-layout(i,j) = i + M*j
-```
-
-但 TMA 不需要 `pointer + offset`，而需要：
-
-```text
-(crd0, crd1, ...)
-```
-
-因此我们需要一种新的 Tensor，使它的“元素”不是内存中的数据，而是按需生成的
-多维坐标。
-
----
-
-## 3. 第一步：Implicit Tensor
-
-CuTe Tensor 的 Iterator 不一定是 pointer，也可以是其他支持随机访问语义的
-对象。
-
-官方首先给出 counting iterator：
-
-```cpp
-Tensor A =
-    make_tensor(counting_iterator<int>(42),
-                make_shape(4,5));
-```
-
-其默认紧凑 Layout 是：
-
-```text
-(4,5):(1,4)
-```
+硬件根据 descriptor 中的基址和 Stride，将 `(m,n)` 转换为真实内存位置。
 
 因此：
 
 ```text
-A(i,j) = 42 + i + 4*j
+TMA descriptor：原 Tensor 的地图
+TMA coordinate： 本次从哪里开始搬的逻辑坐标
+TMA Tensor：     生成这个逻辑坐标的计算器
 ```
 
-打印结果为：
-
-```text
-42  46  50  54  58
-43  47  51  55  59
-44  48  52  56  60
-45  49  53  57  61
-```
-
-这 20 个整数并没有作为数组存放在内存中。Tensor 只保存起点和映射规则，访问时
-即时计算结果。
-
-这就是 Implicit Tensor：
-
-```text
-Tensor 的值由 Iterator 和 Layout 计算得到，
-不要求背后存在一份真实数组。
-```
-
-既然可以隐式生成整数，也就可以隐式生成 TMA coordinate。
+这里讨论的 `ArithTuple` Tensor 不保存数据，也不输出线性内存地址。它输出的是交给
+TMA descriptor 的逻辑坐标。
 
 ---
 
-## 4. 第二步：ArithmeticTupleIterator
+## 再打个比方
 
-TMA coordinate 是一个 tuple：
-
-```text
-(crd0, crd1, crd2, ...)
-```
-
-因此需要一个“坐标版本的 counting iterator”。它必须支持：
-
-1. 解引用后得到当前坐标；
-2. 加上一个坐标增量后得到新坐标。
-
-CuTe 为此提供：
+想象一个仓库，也就是显存。
 
 ```text
-ArithmeticTuple
-ArithmeticTupleIterator
+TMA descriptor 是仓库地图：
+  记录货架从哪里开始、每排多长、各维度如何排列。
+
+TMA coordinate 是提货单：
+  写着“从第 m 排、第 n 列开始取货”。
+
+TMA Tensor 是提货单生成器：
+  根据当前 tile、CTA 和 pipeline 的坐标，自动算出 (m,n)。
+
+TMA hardware 是仓库管理员：
+  根据地图和提货单找到真实地址，并搬运整个 tile。
 ```
 
-`ArithmeticTuple` 可以理解为支持逐元素算术的 `cute::tuple`：
+所以看到：
+
+```text
+ArithTuple(...) o Shape:Stride
+```
+
+可以先把它理解成：
+
+```text
+一个将当前 CuTe view 坐标转换成原 Tensor 坐标的计算器。
+```
+
+---
+
+## 官网教程补充：为什么 Tensor 可以生成坐标
+
+前面的解释已经足够用来读打印结果，但官网还补了两个概念，用于说明这种坐标
+Tensor 为什么能成立。
+
+### 1. Tensor 的 Iterator 不一定是 Pointer
+
+官网首先使用 `counting_iterator`：
+
+```cpp
+Tensor values =
+    make_tensor(
+        counting_iterator<int>(42),
+        make_shape(4,5));
+```
+
+`counting_iterator<int>(42)` 可以理解为从 `42` 开始的数字生成器：
+
+```text
+*iter       = 42
+*(iter + 1) = 43
+*(iter + 2) = 44
+```
+
+它不指向一份真实数组。Tensor 根据 Layout 给出的 offset 即时生成数值：
+
+```text
+values(i,j) = 42 + i + 4*j
+```
+
+官网用这个例子说明：
+
+> CuTe Tensor 的 Iterator 不一定是内存指针，也可以是一个按需生成值的对象。
+
+既然 Iterator 可以生成整数，也就可以生成坐标。
+
+### 2. `ArithmeticTupleIterator` 是坐标生成器
+
+`ArithmeticTupleIterator` 保存一个 tuple 坐标，并允许加上另一个 tuple：
+
+```cpp
+auto coord_iter =
+    make_inttuple_iter(42, Int<2>{}, Int<7>{});
+
+auto moved_iter =
+    coord_iter + make_tuple(Int<0>{}, 5, Int<2>{});
+
+print(*moved_iter);  // (42,7,_9)
+```
+
+计算过程就是：
 
 ```text
 (42,2,7) + (0,5,2) = (42,7,9)
 ```
 
-官方示例：
+普通 pointer 加的是整数 offset；这个 Iterator 加的是坐标 tuple。
+
+### 3. 官方的最小坐标 Tensor
 
 ```cpp
-ArithmeticTupleIterator citer_1 =
-    make_inttuple_iter(42, Int<2>{}, Int<7>{});
-
-ArithmeticTupleIterator citer_2 =
-    citer_1 + make_tuple(Int<0>{}, 5, Int<2>{});
-
-print(*citer_2);  // (42,7,_9)
-```
-
-其含义是：
-
-```text
-citer_1 保存坐标 (42,2,7)
-加上坐标增量     ( 0,5,2)
-得到新坐标       (42,7,9)
-```
-
-普通 pointer 使用一个整数 offset 移动；`ArithmeticTupleIterator` 使用一个 tuple
-形式的坐标 offset 移动。
-
-现在 Iterator 已经能保存坐标，剩下的问题是：Layout 如何生成 tuple offset？
-
----
-
-## 5. 第三步：Basis Stride
-
-Layout 的核心计算是坐标与 Stride 的内积：
-
-```text
-layout(coord) = coord · stride
-```
-
-普通 Stride 是整数：
-
-```text
-(i,j) · (1,M) = i + M*j
-```
-
-输出是一个整数 offset。
-
-如果把 Stride 换成坐标基向量：
-
-```text
-1@0 = (1,0,...)
-1@1 = (0,1,...)
-```
-
-那么：
-
-```text
-(i,j) · (1@0,1@1)
-= i*(1@0) + j*(1@1)
-= (i,j)
-```
-
-Layout 的输出就从整数变成了 tuple coordinate。
-
-这就是 TMA Tensor 能成立的关键：
-
-```text
-Stride 不一定是整数，
-也可以是表示坐标方向的 basis element。
-```
-
----
-
-## 6. 如何阅读 `E<>` 和 `1@...`
-
-CuTe 使用 `E` 表示 basis element，定义位于：
-
-```text
-cute/numeric/arithmetic_tuple.hpp
-```
-
-常见写法：
-
-| C++ 写法 | 打印形式 | 坐标意义 |
-|---|---|---|
-| `E<>{}` | `1` | 普通标量 1 |
-| `E<0>{}` | `1@0` | `(1,0,...)` |
-| `E<1>{}` | `1@1` | `(0,1,0,...)` |
-| `E<2>{}` | `1@2` | `(0,0,1,...)` |
-
-因此：
-
-```text
-5@1 = 5 * E<1>{} = (0,5,0,...)
-```
-
-### 6.1 Basis 可以缩放
-
-```text
-5 * (1@1) = 5@1
-```
-
-它表示对输出坐标的第 1 维贡献 `5`。
-
-### 6.2 Basis 可以相加
-
-```text
-3@0 + 4@1 = (3,4,...)
-```
-
-### 6.3 Basis 可以嵌套
-
-对于 hierarchical coordinate：
-
-| C++ 写法 | 打印形式 | 近似展开 |
-|---|---|---|
-| `E<0,0>{}` | `1@0@0` | `((1,0,...),0,...)` |
-| `E<0,1>{}` | `1@1@0` | `((0,1,...),0,...)` |
-| `E<1,0>{}` | `1@0@1` | `(0,(1,0,...),...)` |
-
-初学时不用死记嵌套规则。先记住：
-
-```text
-1@n 表示对输出坐标第 n 维贡献 1；
-多层 @ 表示输出坐标本身也具有嵌套结构。
-```
-
----
-
-## 7. 两个最小 TMA Tensor
-
-### 7.1 保持坐标顺序
-
-```cpp
-Tensor a =
+Tensor coord =
     make_tensor(
         make_inttuple_iter(0,0),
         make_shape (     4,      5),
         make_stride(E<0>{}, E<1>{}));
 ```
 
-打印形式：
+其中：
 
 ```text
-ArithTuple(0,0) o (4,5):(_1@0,_1@1)
+E<0>{} 打印为 1@0
+E<1>{} 打印为 1@1
 ```
 
-映射为：
+因此：
 
 ```text
-a(i,j) = (i,j)
+coord(i,j) = (i,j)
 ```
 
-例如：
-
-```text
-a(2,3) = (2,3)
-```
-
-### 7.2 交换坐标顺序
+如果交换两个 Basis stride：
 
 ```cpp
-Tensor b =
+Tensor swapped =
     make_tensor(
         make_inttuple_iter(0,0),
         make_shape (     4,      5),
         make_stride(E<1>{}, E<0>{}));
 ```
 
-映射为：
+则：
 
 ```text
-b(i,j) = (j,i)
+swapped(i,j) = (j,i)
+```
+
+这不是说 TMA 主要用于转置。官网只是用最简单的坐标交换来证明：Basis stride
+可以控制每个输入 mode 应该进入输出坐标的哪个方向。
+
+---
+
+## 它在实际代码里怎么用
+
+下面只保留 CUTLASS 官方 Hopper 示例中的 TMA load 主线。
+
+### 1. Host 侧创建 TMA Atom
+
+先用普通 pointer Tensor 描述原矩阵 A：
+
+```cpp
+auto M  = int(m);
+auto K  = int(k);
+auto dA = make_stride(Int<1>{}, ldA);
+
+Tensor mA =
+    make_tensor(
+        A,
+        make_shape(M, K),
+        dA);
+```
+
+定义一次 TMA 搬运的 tile 和目标 SMEM Layout：
+
+```cpp
+auto bM     = Int<128>{};
+auto bK     = Int<64>{};
+auto stages = Int<3>{};
+
+auto sA_layout =
+    tile_to_shape(
+        GMMA::Layout_MN_SW128_Atom<ElementA>{},
+        make_shape(bM, bK, stages));
+```
+
+创建 TMA Atom：
+
+```cpp
+auto tmaA =
+    make_tma_atom(
+        SM90_TMA_LOAD{},
+        mA,
+        sA_layout(_,_,0),
+        make_shape(bM, bK));
+```
+
+这一步告诉 CuTe：
+
+```text
+从 mA 搬数据
+每次搬 (128,64)
+搬到 sA_layout 描述的 shared memory
+使用 SM90_TMA_LOAD
+```
+
+### 2. Kernel 中取得 TMA 坐标计算器
+
+```cpp
+Tensor mA_coord =
+    tmaA.get_tma_tensor(make_shape(M, K));
+```
+
+这里的 `mA_coord` 不保存 A 的数据：
+
+```text
+mA_coord(m,k) = 原矩阵逻辑坐标 (m,k)
 ```
 
 例如：
 
 ```text
-b(2,3) = (3,2)
+mA_coord(5,7) = (5,7)
 ```
 
-两个例子只改变了 Stride：
+### 3. 取得当前 CTA 的坐标 View
 
-```text
-(1@0,1@1) → 保持坐标顺序
-(1@1,1@0) → 交换坐标顺序
+```cpp
+auto cta_coord =
+    make_coord(blockIdx.x, blockIdx.y, _);
+
+Tensor gA_coord =
+    local_tile(
+        mA_coord,
+        cta_tiler,
+        cta_coord,
+        Step<_1, X, _1>{});
 ```
 
-因此可以把 TMA Tensor 的三个部分分别理解为：
+`local_tile` 在这里没有加载数据。它只是让坐标计算器指向当前 CTA 负责的 tile。
+
+### 4. 配对 GMEM 坐标与 SMEM 目标
+
+```cpp
+Tensor sA =
+    make_tensor(
+        make_smem_ptr(shared_storage.A.begin()),
+        SmemLayoutA{});
+
+auto [tAgA, tAsA] =
+    tma_partition(
+        tmaA,
+        Int<0>{},
+        Layout<_1>{},
+        group_modes<0,2>(sA),
+        group_modes<0,2>(gA_coord));
+```
+
+其中：
 
 ```text
-Iterator：坐标原点
-Shape：   CuTe 逻辑坐标的定义域
-Stride：  逻辑坐标如何贡献到 TMA coordinate
+tAgA：提供当前 GMEM tile 的原 Tensor 逻辑坐标
+tAsA：指向当前 pipeline stage 的 SMEM 目标
+```
+
+### 5. 真正发起 TMA 搬运
+
+```cpp
+copy(
+    tmaA.with(tma_barrier[0]),
+    tAgA(_, k_tile),
+    tAsA(_, pipe));
+```
+
+这三个参数可以读成：
+
+```text
+tmaA.with(barrier)：使用哪个 descriptor，并在完成时通知哪个 barrier
+tAgA(_,k_tile)：    从原 Tensor 的哪个逻辑坐标开始搬
+tAsA(_,pipe)：       搬到哪个 SMEM tile
+```
+
+真正的数据搬运发生在 `copy(...)`。此前的 `get_tma_tensor`、`local_tile` 和
+`tma_partition` 都是在生成、变换或整理逻辑坐标。
+
+完整 TMA kernel 还必须正确初始化和等待 barrier。上面的代码只用于展示坐标
+Tensor 如何进入实际 TMA load 数据流。
+
+---
+
+## 完整流程
+
+```text
+Host
+  A pointer + Shape + Stride
+        │
+        ▼
+  make_tma_atom
+        │
+        ▼
+  TMA descriptor
+
+Kernel
+  get_tma_tensor
+        │
+        ▼
+  原 Tensor 坐标计算器
+        │ local_tile
+        ▼
+  当前 CTA tile 的原 Tensor 坐标
+        │ tma_partition
+        ▼
+  GMEM 坐标 + SMEM 目标
+        │ copy
+        ▼
+  GMEM tile ───TMA───► SMEM tile
 ```
 
 ---
 
-## 8. 解读官方的复杂打印
-
-现在分析本章开头的 Tensor：
-
-```text
-ArithTuple(0,_0,_0,_0) o
-((_128,_64),2,3,1):((_1@0,_1@1),_64@1,_1@2,_1@3)
-```
-
-### 8.1 Iterator
-
-```text
-ArithTuple(0,0,0,0)
-```
-
-表示输出是一个四维坐标，当前原点为：
-
-```text
-(0,0,0,0)
-```
-
-### 8.2 Shape
-
-```text
-((128,64),2,3,1)
-```
-
-因此输入逻辑坐标可以写成：
-
-```text
-((i,j),k,l,m)
-```
-
-### 8.3 Stride
-
-```text
-((1@0,1@1),64@1,1@2,1@3)
-```
-
-逐项解释：
-
-```text
-i → TMA coordinate 0
-j → TMA coordinate 1
-k → 以 64 为倍率贡献到 TMA coordinate 1
-l → TMA coordinate 2
-m → TMA coordinate 3
-```
-
-因此完整映射为：
-
-```text
-((i,j),k,l,m)
-  →
-(i, j + 64*k, l, m)
-```
-
-例如：
-
-```text
-输入：((5,7),1,2,0)
-输出：(5,71,2,0)
-```
-
-因为：
-
-```text
-71 = 7 + 64*1
-```
-
-以后遇到 TMA Tensor 打印，固定按以下顺序阅读：
-
-```text
-1. `o` 左边：坐标原点是什么？
-2. `:` 左边：输入逻辑坐标是什么结构？
-3. `:` 右边：每个逻辑 mode 贡献到输出坐标的哪一维？
-4. 计算 coord · stride，再加 Iterator 原点。
-```
-
----
-
-## 9. 为什么 TMA Tensor 仍能 Tile 和 Partition
-
-Pointer Tensor 与 TMA Tensor 的 Layout 操作没有本质区别：
-
-```text
-Pointer Tensor：
-  tile/partition 后生成正确的数据地址
-
-TMA Tensor：
-  tile/partition 后生成正确的 descriptor coordinate
-```
-
-假设：
-
-```text
-tma_tensor(i,j) = (i,j)
-```
-
-某个 tile 的起点是 `(128,64)`，那么 tile 内坐标 `(u,v)` 对应：
-
-```text
-(128+u,64+v)
-```
-
-这里没有移动真实数据。`local_tile`、slice 和 partition 只是继续组合坐标映射。
-
-这正是 CuTe 构造隐式 TMA Tensor 的目的：
-
-```text
-复用已有 Layout Algebra，
-让坐标和普通数据 Tensor 一样参与 tile 与 partition。
-```
-
----
-
-## 10. Descriptor、TMA Tensor 与 TMA Copy 的关系
-
-三个概念不要混淆。
-
-### Descriptor
-
-```text
-描述完整 GMEM Tensor 的物理存储与 TMA 配置
-```
-
-其中包含 global-memory base pointer。
-
-### TMA Tensor
-
-```text
-将 CuTe 逻辑位置映射为 descriptor coordinate
-```
-
-它通常是隐式坐标 Tensor，不保存实际数据。
-
-### TMA Copy
-
-```text
-使用 descriptor、coordinate 和 SMEM 地址发出硬件搬运
-```
-
-关系如下：
-
-```text
-TMA Tensor ────────► coordinate ──┐
-                                  │
-TMA descriptor ───────────────────┼─► TMA instruction
-                                  │
-SMEM address ─────────────────────┘
-```
-
-因此：
-
-```text
-TMA Tensor 负责“算坐标”，
-TMA copy 负责“搬数据”。
-```
-
----
-
-## 11. 与上一章 Predication 的关系
-
-上一章的 identity coordinate Tensor：
-
-```text
-逻辑坐标 → 原始数据坐标 → 与 Shape 比较
-```
-
-本章的 TMA Tensor：
-
-```text
-逻辑坐标 → descriptor coordinate → 交给 TMA 指令
-```
-
-共同点是：
-
-```text
-坐标也可以成为 Tensor 的值，
-并跟随 tile、slice 和 partition 一起变化。
-```
-
-区别只是坐标的用途：
-
-| Tensor | 坐标用于什么 |
-|---|---|
-| Identity coordinate Tensor | 判断是否越界 |
-| TMA coordinate Tensor | 向 TMA 指令提供 descriptor coordinate |
-
----
-
-## 12. 常见误解
-
-### 误解 1：`ArithTuple` 是内存里存储的数据
-
-它通常是按需计算的坐标，不存在一张真实的坐标数组。
-
-### 误解 2：TMA Tensor 内保存 GMEM pointer
-
-GMEM base pointer 在 descriptor 中；TMA Tensor 生成的是坐标。
-
-### 误解 3：Stride 永远是整数距离
-
-普通数据 Tensor 常使用整数 Stride；TMA Tensor 可以使用 Basis stride，使 Layout
-输出 tuple coordinate。
-
-### 误解 4：`1@1` 就是普通的 stride 1
-
-`1@1` 表示对输出坐标的第 1 个分量贡献 1。
-
-### 误解 5：TMA Tensor 会自动搬运数据
-
-它只生成坐标。真正的搬运仍需要 descriptor、TMA copy 和正确的同步机制。
-
----
-
-## 13. 最小心智模型
-
-```text
-Pointer-backed GMEM Tensor
-──────────────────────────
-GMEM pointer o integer-stride Layout
-
-logical coordinate
-      ↓
-integer offset
-      ↓
-GMEM address
-
-
-TMA Tensor
-──────────
-ArithmeticTupleIterator o basis-stride Layout
-
-logical coordinate
-      ↓
-tuple offset
-      ↓
-TMA descriptor coordinate
-```
-
-一句话总结：
-
-```text
-TMA Tensor 是生成坐标的 Tensor，不是保存数据的 Tensor。
-```
-
----
-
-## 14. 自测
-
-1. TMA descriptor 与 TMA coordinate 分别描述什么？
-2. 为什么 TMA 指令不需要单独接收 GMEM pointer？
-3. 什么是 Implicit Tensor？
-4. `ArithmeticTupleIterator` 与普通 pointer 的 offset 有什么区别？
-5. 为什么普通整数 Stride 只能生成线性 offset？
-6. `(i,j) · (1@0,1@1)` 的结果是什么？
-7. `(i,j) · (1@1,1@0)` 的结果是什么？
-8. `64@1` 表示什么？
-9. 如何解读 `Iterator o Shape:Stride`？
-10. TMA Tensor、descriptor 和 TMA copy 各自负责什么？
-
-## 学完标准
-
-你应该能够：
-
-1. 用一条数据流解释 pointer-backed GMEM Tensor 与 TMA Tensor 的区别；
-2. 解释 Implicit Tensor、`ArithmeticTuple` 和 `ArithmeticTupleIterator`；
-3. 把 `E<0>{}`、`E<1>{}` 和缩放 Basis 展开成坐标方向；
-4. 手算逻辑坐标与 Basis stride 的内积；
-5. 推导复杂打印对应的坐标映射；
-6. 说明 TMA Tensor 为什么仍然可以使用 CuTe 的 tile 和 partition 操作。
+## 最后只记三句话
+
+1. **`ArithTuple(...) o Shape:Stride` 是坐标计算器，不是数据 Tensor。**
+2. **Basis stride 中的 `n@d` 表示向输出坐标第 `d` 维贡献 `n`。**
+3. **TMA Tensor 负责生成原 Tensor 逻辑坐标，`copy(...)` 才负责搬数据。**
 
 ## 官方资料
 
 - [CuTe TMA Tensors](https://docs.nvidia.com/cutlass/latest/media/docs/cpp/cute/0z_tma_tensors.html)
 - [官方 Markdown](https://github.com/NVIDIA/cutlass/blob/main/media/docs/cpp/cute/0z_tma_tensors.md)
-- [`arithmetic_tuple.hpp`](https://github.com/NVIDIA/cutlass/blob/main/include/cute/numeric/arithmetic_tuple.hpp)
+- [官方 Hopper WGMMA + TMA 示例](https://github.com/NVIDIA/cutlass/blob/main/examples/cute/tutorial/hopper/wgmma_tma_sm90.cu)
+- [官方 TMA load testbed](https://github.com/NVIDIA/cutlass/blob/main/test/unit/cute/hopper/tma_load_testbed.hpp)
