@@ -307,6 +307,8 @@ GMEM → SMEM → TMEM
 ## 官方示例
 
 - [Blackwell TCGen05 官方 Python 示例导读](官方Python示例导读.md)
+- [本地保存的官方完整源码](代码实验/fp16_gemm_0.py)
+- [编译运行说明](../代码实验/README.md)
 - `examples/python/CuTeDSL/cute/blackwell/tutorial/tutorial_gemm/fp16_gemm_0.py`
 - `examples/python/CuTeDSL/cute/blackwell/tutorial/tutorial_gemm/fp16_gemm_1.py` 至
   `fp16_gemm_6.py`

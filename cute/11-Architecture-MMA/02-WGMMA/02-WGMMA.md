@@ -227,6 +227,8 @@ TCGen05 将它移入 TMEM。
 ## 官方示例
 
 - [Hopper WGMMA 官方 Python 示例导读](官方Python示例导读.md)
+- [本地保存的官方完整源码](代码实验/dense_gemm.py)
+- [编译运行说明](../代码实验/README.md)
 - `examples/python/CuTeDSL/cute/hopper/kernel/dense_gemm/dense_gemm.py`
 - `examples/python/CuTeDSL/cute/hopper/kernel/dense_gemm/dense_gemm_persistent.py`
 - `examples/python/CuTeDSL/cute/hopper/kernel/attention/fmha.py`

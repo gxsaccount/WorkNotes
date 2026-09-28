@@ -174,5 +174,7 @@ RMEM A/B fragment    → SMEM descriptor
 ## 官方示例
 
 - [Ampere Warp MMA 官方 Python 示例导读](官方Python示例导读.md)
+- [本地保存的官方完整源码](代码实验/tensorop_gemm.py)
+- [编译运行说明](../代码实验/README.md)
 - `examples/python/CuTeDSL/cute/ampere/kernel/dense_gemm/tensorop_gemm.py`
 - `examples/python/CuTeDSL/cute/blackwell_geforce/kernel/blockscaled_gemm/dense_blockscaled_gemm_persistent_pingpong.py`

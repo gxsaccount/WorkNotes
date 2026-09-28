@@ -3,6 +3,8 @@
 > 官方源码：
 > [`examples/python/CuTeDSL/cute/ampere/kernel/dense_gemm/tensorop_gemm.py`](https://github.com/NVIDIA/cutlass/blob/main/examples/python/CuTeDSL/cute/ampere/kernel/dense_gemm/tensorop_gemm.py)
 >
+> 本地源码：[代码实验/tensorop_gemm.py](代码实验/tensorop_gemm.py)
+>
 > 更新：2026-09-28
 
 ## 1. 为什么先读这个例子

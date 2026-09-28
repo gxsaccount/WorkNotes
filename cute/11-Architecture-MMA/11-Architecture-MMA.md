@@ -94,10 +94,23 @@ MMA 计算 K tile k
 
 1. [Warp-Level MMA](01-WMMA/01-WMMA.md)
    - [官方 Python 示例导读](01-WMMA/官方Python示例导读.md)
+   - [官方完整源码](01-WMMA/代码实验/tensorop_gemm.py)
 2. [Hopper WGMMA](02-WGMMA/02-WGMMA.md)
    - [官方 Python 示例导读](02-WGMMA/官方Python示例导读.md)
+   - [官方完整源码](02-WGMMA/代码实验/dense_gemm.py)
 3. [Blackwell TCGen05](03-TCGen05/03-TCGen05.md)
    - [官方 Python 示例导读](03-TCGen05/官方Python示例导读.md)
+   - [官方完整源码](03-TCGen05/代码实验/fp16_gemm_0.py)
+
+## 代码实验
+
+[代码实验说明与运行脚本](代码实验/README.md)提供：
+
+- 固定 CUTLASS commit 的 Warp MMA、WGMMA 与 TCGen05 官方源码；
+- 源码 SHA-256 和 Python/Bash 静态校验；
+- SM90 WGMMA smoke test；
+- SM100 TCGen05 smoke test；
+- reference check 与明确的硬件能力检查。
 
 ## 官方资料
 

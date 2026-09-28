@@ -3,6 +3,8 @@
 > 官方教程目录：
 > [`examples/python/CuTeDSL/cute/blackwell/tutorial/tutorial_gemm/`](https://github.com/NVIDIA/cutlass/tree/main/examples/python/CuTeDSL/cute/blackwell/tutorial/tutorial_gemm)
 >
+> 本地源码：[代码实验/fp16_gemm_0.py](代码实验/fp16_gemm_0.py)
+>
 > 更新：2026-09-28
 
 ## 1. 为什么 Blackwell 应从教程系列开始

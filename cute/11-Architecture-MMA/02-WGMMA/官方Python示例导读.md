@@ -3,6 +3,8 @@
 > 官方源码：
 > [`examples/python/CuTeDSL/cute/hopper/kernel/dense_gemm/dense_gemm.py`](https://github.com/NVIDIA/cutlass/blob/main/examples/python/CuTeDSL/cute/hopper/kernel/dense_gemm/dense_gemm.py)
 >
+> 本地源码：[代码实验/dense_gemm.py](代码实验/dense_gemm.py)
+>
 > 更新：2026-09-28
 
 ## 1. 阅读目标
