@@ -32,7 +32,7 @@
 
 # 中文注释版出处：
 # https://github.com/NVIDIA/cutlass/blob/098de2a652cf8f00fd70b2df54051c7eccbb855a/examples/python/CuTeDSL/cute/blackwell/tutorial/tutorial_gemm/fp16_gemm_0.py
-# 仅翻译注释、文档字符串和用户提示；代码逻辑与公开 API 保持不变。
+# 逐行翻译注释和文档字符串，不删除或合并内容；计算代码保持英文原版结构。
 
 import argparse
 from typing import Tuple
@@ -46,14 +46,21 @@ import cutlass.utils.blackwell_helpers as sm100_utils
 from cutlass.cute.runtime import from_dlpack
 
 """
-Blackwell TCGen05 FP16 GEMM 入门示例。
+第一个教程 GEMM 演示 CuTeDSL 中的简单内核实现
 
-数据流：
-    GMEM --TMA--> SMEM --TCGen05 MMA--> TMEM accumulator
-    TMEM --T2R--> RMEM --向量化写回--> GMEM
+这个密集的 GEMM 内核仅用 200 多行代码即可实现。
+由于tile尺寸较大，它可以在 8k×8k×8k 问题尺寸上实现非常高的性能。
+它可以作为帮助用户快速实验的起点
+针对其他问题规模可能出现的挑战进行优化。
 
-默认 MMA tile 为 128×256×64，输入/输出为 FP16，累加类型为 FP32。
-问题规模 M、N 必须分别能被默认 tile 的 M、N 维整除。
+要运行此示例：
+.. code-block:: bash
+
+    python examples/blackwell/tutorial_gemm/fp16_gemm_0.py  \
+      --mnk 8192,8192,8192
+
+本例的约束条件：
+* m 和 n 的问题大小必须能被图块大小 m & n 整除 (128, 256)
 """
 
 io_dtype = cutlass.Float16
@@ -85,7 +92,7 @@ def kernel(
     a_smem_layout: cute.ComposedLayout,
     b_smem_layout: cute.ComposedLayout,
 ):
-    # 当前线程、warp 和 block 坐标。
+    # 当前线程/warp/块坐标
     tidx, _, _ = cute.arch.thread_idx()
     warp_idx = cute.arch.warp_idx()
     warp_idx = cute.arch.make_warp_uniform(warp_idx)
@@ -96,7 +103,7 @@ def kernel(
     # 1. 准备参数
     #
 
-    # 分配 SMEM。
+    # 分配SMEM
     smem = cutlass.utils.SmemAllocator()
     storage = smem.allocate(SharedStorage)
     sA = smem.allocate_tensor(
@@ -124,7 +131,7 @@ def kernel(
     num_tmem_cols = 512
     tmem.allocate(num_tmem_cols)
 
-    # 预取 TMA 描述符
+    # 预取 tma 描述符
     if warp_idx == 0:
         cpasync.prefetch_descriptor(tma_atom_a)
         cpasync.prefetch_descriptor(tma_atom_b)
@@ -150,7 +157,7 @@ def kernel(
         barrier_storage=storage.acc_mbar_ptr.data_ptr(),
     ).make_participants()
 
-    # 按 MMA 划分 Tensor，并构造 fragment。
+    # MMA 的张量分区并生成fragment
     # (bM, bK, RestK)
     gA = cute.local_tile(mA_mkl, mma_tiler_mnk, mma_coord_mnk, proj=(1, None, 1))
     # (bN, bK, RestK)
@@ -172,7 +179,7 @@ def kernel(
     acc_shape = tiled_mma.partition_shape_C(mma_tiler_mnk[:2])
     # (MMA, MMA_M, MMA_N)
     tCtAcc = tiled_mma.make_fragment_C(acc_shape)
-    # 为 TMA 划分 Tensor；这里需要使用已经按 MMA 划分的 Tensor。
+    # TMA 的分区张量；这需要为 MMA 划分张量
     tAsA, tAgA = cute.nvgpu.cpasync.tma_partition(
         tma_atom_a,
         0,
@@ -188,11 +195,11 @@ def kernel(
         cute.group_modes(tCgB, 0, 3),
     )
 
-    # 取得已分配 TMEM 的起始指针前先进行 CTA 级同步。
-    # 只有 warp 0 发起分配，所以其他线程必须等待分配完成。
+    # 在检索指向已分配 TMEM 开头的指针之前进行 CTA 范围同步
+    # 只有 warp 0 进行分配，因此我们需要在检索 TMEM 起始地址之前进行同步
     tmem.wait_for_alloc()
     tmem_ptr = tmem.retrieve_ptr(acc_dtype)
-    # 将 tCtAcc 绑定到实际 TMEM 指针。
+    # 交换 tCtAcc 中的指针
     tCtAcc = cute.make_tensor(tmem_ptr, tCtAcc.layout)
 
     subtile_cnt = 4
@@ -205,7 +212,7 @@ def kernel(
     # (EpiTile, NumTiles)
     gC_epi = cute.zipped_divide(tCgC, epi_tiler)
 
-    # 每个线程加载 64 个 FP32 元素。
+    # 每个线程加载 64 x fp32
     tmem_atom = cute.make_copy_atom(
         tcgen05.Ld32x32bOp(tcgen05.Repetition.x64),
         cutlass.Float32,
@@ -228,7 +235,7 @@ def kernel(
     #
     num_k_tiles = cute.size(gA, mode=[2])
     if warp_idx == 0:
-        # 等待空闲的累加器缓冲区。
+        # 等待一个空的累加器缓冲区
         acc_empty = acc_producer.acquire_and_advance()
         for k_tile_idx in cutlass.range(num_k_tiles, prefetch_stages=ab_stages - 2):
             # 发射 TMA 加载
@@ -246,7 +253,7 @@ def kernel(
                 tma_bar_ptr=ab_empty.barrier,
             )
 
-            # 执行一个 K block 对应的 MMA 指令。
+            # 执行一个 K 块的 MMA 指令
             ab_full = ab_consumer.wait_and_advance()
             num_k_blocks = cute.size(tCrA, mode=[2])
             for k_block_idx in cutlass.range_constexpr(num_k_blocks):
@@ -260,24 +267,24 @@ def kernel(
                 )
                 tiled_mma.set(tcgen05.Field.ACCUMULATE, True)
 
-            # 标记 A/B 缓冲区已消费完毕，可供下一次加载复用。
+            # 发出信号表明 A/B 缓冲区已被消耗并准备好进行下一次加载
             ab_full.release()
 
-        # 标记累加器计算完成。
+        # 累加器已完全计算的信号
         acc_empty.commit()
 
     #
-    # 3. 尾声
+    # 3. epilogue
     #
 
     # 释放 TMEM 分配锁
     tmem.relinquish_alloc_permit()
 
-    # 等待累加器缓冲区就绪。
+    # 等待累加器缓冲区已满
     acc_full = acc_consumer.wait_and_advance()
 
-    # TMEM → RMEM → GMEM。
-    # 继续细分 tile，以提高指令级并行性。
+    # TMEM -> RMEM -> GEMM
+    # 子平铺以获得更好的指令级并行性
     for i in cutlass.range(cute.size(tDtC, mode=[2])):
         cute.copy(tmem_tiled_copy, tDtC[None, None, i], tCrAcc)
         tCrC.store(tCrAcc.load().to(io_dtype))
@@ -319,7 +326,7 @@ def host_function(a: cute.Tensor, b: cute.Tensor, c: cute.Tensor):
     a_smem_layout_one_stage = cute.select(a_smem_layout, mode=[0, 1, 2])
     b_smem_layout_one_stage = cute.select(b_smem_layout, mode=[0, 1, 2])
 
-    # 构造 TMA 加载 Atom
+    # 构建TMA加载原子
     op = cute.nvgpu.cpasync.CopyBulkTensorTileG2SOp(tcgen05.CtaGroup.ONE)
     a_tma_atom, a_tma_tensor = cute.nvgpu.make_tiled_tma_atom_A(
         op,
@@ -336,7 +343,7 @@ def host_function(a: cute.Tensor, b: cute.Tensor, c: cute.Tensor):
         tiled_mma,
     )
 
-    # 可取消注释，打印有助于调试的 kernel 属性。
+    # 清晰地打印对调试有用的内核属性
     # print(f"a            = {cute.pretty_str(a)}")
     # print(f"b            = {cute.pretty_str(b)}")
     # print(f"c            = {cute.pretty_str(c)}")
@@ -372,16 +379,16 @@ def run_dense_gemm(
     import cutlass.torch as cutlass_torch
 
     print("===================================================================")
-    print("使用以下配置运行 Blackwell FP16 GEMM 示例 0：")
-    print(f"  问题规模 MNK：{mnk}")
-    print(f"  容差：{tolerance}")
+    print("Running Blackwell fp16 GEMM example 0 with:")
+    print(f"  mnk:       {mnk}")
+    print(f"  tolerance: {tolerance}")
     print("===================================================================")
     print()
 
     m, n, k = mnk
     torch.manual_seed(1111)
 
-    # 构造 K-major Tensor（PyTorch Tensor 默认为行优先）
+    # 制作 K 大张量（PyTorch张量是行大张量）
     def make_tensors(mn, k, dtype):
         shape = (mn, k)
         return (
@@ -427,7 +434,7 @@ if __name__ == "__main__":
             return [int(x.strip()) for x in s.split(",")]
         except ValueError:
             raise argparse.ArgumentTypeError(
-                "格式无效，应为逗号分隔的整数。"
+                "Invalid format. Expected comma-separated integers."
             )
 
     from cuda.bindings import driver as cu_driver
@@ -435,26 +442,26 @@ if __name__ == "__main__":
     cu_driver.cuInit(0)
     err, device_count = cu_driver.cuDeviceGetCount()
     if err != cu_driver.CUresult.CUDA_SUCCESS or device_count < 1:
-        raise RuntimeError("运行本示例需要 NVIDIA GPU")
+        raise RuntimeError("A GPU is required to run this example")
 
-    parser = argparse.ArgumentParser(description="Blackwell FP16 GEMM 示例 0")
+    parser = argparse.ArgumentParser(description="Blackwell fp16 GEMM example 0")
     parser.add_argument(
         "--mnk",
         type=parse_comma_separated_ints,
         default=[8192, 8192, 8192],
-        help="MNK 维度，以逗号分隔",
+        help="MNK dimensions (comma-separated)",
     )
     parser.add_argument(
-        "--tolerance", type=float, default=1e-01, help="结果验证容差"
+        "--tolerance", type=float, default=1e-01, help="Tolerance for validation"
     )
     args = parser.parse_args()
     if len(args.mnk) != 3:
-        parser.error("--mnk 必须恰好包含 3 个值")
+        parser.error("--mnk must contain exactly 3 values")
     if args.mnk[0] % mma_tiler_mnk[0] != 0 or args.mnk[1] % mma_tiler_mnk[1] != 0:
-        parser.error("M、N 必须分别能被 mma_tiler_mn 对应维度整除")
+        parser.error("m n must be divisible by mma_tiler_mn")
 
     run_dense_gemm(
         args.mnk,
         args.tolerance,
     )
-    print("运行通过")
+    print("PASS")

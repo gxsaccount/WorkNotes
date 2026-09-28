@@ -2,7 +2,9 @@
 
 import ast
 import hashlib
+import io
 import subprocess
+import tokenize
 from pathlib import Path
 
 
@@ -11,7 +13,9 @@ ROOT = Path(__file__).resolve().parents[2]
 SOURCES = {
     ROOT / "01-WMMA" / "代码实验" / "tensorop_gemm.py": {
         "source_path": "examples/python/CuTeDSL/cute/ampere/kernel/dense_gemm/tensorop_gemm.py",
-        "logic_sha256": "2c9e7ded13462a60735e777fb977d5bcc31549660de6fbfa8abff2a5d55da358",
+        "logic_sha256": "1687dafbe7c8b4b76200b173f695f06eeb247238ee0d1f7a52ee6af1578ba05d",
+        "comment_count": 200,
+        "doc_newlines": [48, 20, 20, 23, 37],
         "markers": (
             "TensorOpGemm",
             "warp.MmaF16BF16Op",
@@ -21,7 +25,9 @@ SOURCES = {
     },
     ROOT / "02-WGMMA" / "代码实验" / "dense_gemm.py": {
         "source_path": "examples/python/CuTeDSL/cute/hopper/kernel/dense_gemm/dense_gemm.py",
-        "logic_sha256": "9854f590988d72fedac07f9a4ae46be4a82d72dd9a7d1773458d9bdb8c870b8f",
+        "logic_sha256": "12ee74cca506116966e1b6aca62fce1b3348e67362a4456f0f6cb5c5bbedc54d",
+        "comment_count": 166,
+        "doc_newlines": [51, 38, 31, 12, 11, 15, 25, 16, 25, 11, 11, 13, 18, 24],
         "markers": (
             "HopperWgmmaGemmKernel",
             "warpgroup",
@@ -31,7 +37,9 @@ SOURCES = {
     },
     ROOT / "03-TCGen05" / "代码实验" / "fp16_gemm_0.py": {
         "source_path": "examples/python/CuTeDSL/cute/blackwell/tutorial/tutorial_gemm/fp16_gemm_0.py",
-        "logic_sha256": "b29780f3b79b5e2f14ae79c9d0053c0b2181ea31e94c80046ff1ecb5513cd493",
+        "logic_sha256": "173380dc4ccad7f54288733fc8cee6b1469d1d2399f6a2b10d3ddb4643a4c9bd",
+        "comment_count": 98,
+        "doc_newlines": [15],
         "markers": (
             "tcgen05.MmaF16BF16Op",
             "TmemAllocator",
@@ -49,20 +57,12 @@ SHELL_SCRIPTS = (
 
 
 class StripStrings(ast.NodeTransformer):
-    """忽略翻译允许修改的字符串和打印参数，仅校验计算代码结构。"""
+    """忽略翻译允许修改的字符串，仅校验计算代码结构。"""
 
     def visit_Constant(self, node: ast.Constant):
         if isinstance(node.value, str):
             return ast.copy_location(ast.Constant(value="<字符串>"), node)
         return node
-
-    def visit_Call(self, node: ast.Call):
-        self.generic_visit(node)
-        if isinstance(node.func, ast.Name) and node.func.id == "print":
-            node.args = []
-            node.keywords = []
-        return node
-
 
 def validate_source(path: Path, spec: dict) -> None:
     data = path.read_bytes()
@@ -73,6 +73,26 @@ def validate_source(path: Path, spec: dict) -> None:
     ).hexdigest()
     if logic_hash != spec["logic_sha256"]:
         raise AssertionError(f"{path}：注释翻译之外的代码结构发生变化")
+
+    comment_count = sum(
+        token.type == tokenize.COMMENT
+        for token in tokenize.generate_tokens(io.StringIO(source).readline)
+    )
+    if comment_count != spec["comment_count"]:
+        raise AssertionError(
+            f"{path}：注释数量发生变化，期望 {spec['comment_count']}，"
+            f"实际 {comment_count}"
+        )
+
+    doc_newlines = [
+        node.value.value.count("\n")
+        for node in ast.walk(ast.parse(source))
+        if isinstance(node, ast.Expr)
+        and isinstance(node.value, ast.Constant)
+        and isinstance(node.value.value, str)
+    ]
+    if doc_newlines != spec["doc_newlines"]:
+        raise AssertionError(f"{path}：文档字符串的行数或数量发生变化")
 
     expected_url = (
         "https://github.com/NVIDIA/cutlass/blob/"
