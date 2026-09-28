@@ -14,8 +14,13 @@ SOURCES = {
     ROOT / "01-WMMA" / "代码实验" / "tensorop_gemm.py": {
         "source_path": "examples/python/CuTeDSL/cute/ampere/kernel/dense_gemm/tensorop_gemm.py",
         "logic_sha256": "1687dafbe7c8b4b76200b173f695f06eeb247238ee0d1f7a52ee6af1578ba05d",
+        "line_count": 1395,
         "comment_count": 200,
         "doc_newlines": [48, 20, 20, 23, 37],
+        "run_commands": (
+            "python examples/cute/ampere/kernel/dense_gemm/tensorop_gemm.py",
+            "ncu python examples/cute/ampere/kernel/dense_gemm/tensorop_gemm.py",
+        ),
         "markers": (
             "TensorOpGemm",
             "warp.MmaF16BF16Op",
@@ -26,8 +31,13 @@ SOURCES = {
     ROOT / "02-WGMMA" / "代码实验" / "dense_gemm.py": {
         "source_path": "examples/python/CuTeDSL/cute/hopper/kernel/dense_gemm/dense_gemm.py",
         "logic_sha256": "12ee74cca506116966e1b6aca62fce1b3348e67362a4456f0f6cb5c5bbedc54d",
+        "line_count": 1619,
         "comment_count": 166,
         "doc_newlines": [51, 38, 31, 12, 11, 15, 25, 16, 25, 11, 11, 13, 18, 24],
+        "run_commands": (
+            "python examples/hopper/dense_gemm.py",
+            "ncu python examples/hopper/dense_gemm.py",
+        ),
         "markers": (
             "HopperWgmmaGemmKernel",
             "warpgroup",
@@ -38,8 +48,12 @@ SOURCES = {
     ROOT / "03-TCGen05" / "代码实验" / "fp16_gemm_0.py": {
         "source_path": "examples/python/CuTeDSL/cute/blackwell/tutorial/tutorial_gemm/fp16_gemm_0.py",
         "logic_sha256": "173380dc4ccad7f54288733fc8cee6b1469d1d2399f6a2b10d3ddb4643a4c9bd",
+        "line_count": 467,
         "comment_count": 98,
         "doc_newlines": [15],
+        "run_commands": (
+            "python examples/blackwell/tutorial_gemm/fp16_gemm_0.py",
+        ),
         "markers": (
             "tcgen05.MmaF16BF16Op",
             "TmemAllocator",
@@ -74,6 +88,13 @@ def validate_source(path: Path, spec: dict) -> None:
     if logic_hash != spec["logic_sha256"]:
         raise AssertionError(f"{path}：注释翻译之外的代码结构发生变化")
 
+    line_count = len(source.splitlines())
+    if line_count != spec["line_count"]:
+        raise AssertionError(
+            f"{path}：源码行数发生变化，期望 {spec['line_count']}，"
+            f"实际 {line_count}"
+        )
+
     comment_count = sum(
         token.type == tokenize.COMMENT
         for token in tokenize.generate_tokens(io.StringIO(source).readline)
@@ -93,6 +114,10 @@ def validate_source(path: Path, spec: dict) -> None:
     ]
     if doc_newlines != spec["doc_newlines"]:
         raise AssertionError(f"{path}：文档字符串的行数或数量发生变化")
+
+    for command in spec["run_commands"]:
+        if command not in source:
+            raise AssertionError(f"{path}：缺少原版运行命令 {command!r}")
 
     expected_url = (
         "https://github.com/NVIDIA/cutlass/blob/"

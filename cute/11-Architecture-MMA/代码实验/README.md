@@ -61,6 +61,7 @@ python3 11-Architecture-MMA/代码实验/tests/validate_sources.py
 - 每份源码中的固定 commit 英文原版链接；
 - 原注释数量完整保留；
 - 每段文档字符串的行数完整保留；
+- 官方运行命令与 NCU 命令原样保留；
 - Python 语法；
 - WGMMA/TCGen05 核心 API 标记；
 - 运行脚本的 Bash 语法。
