@@ -10,14 +10,13 @@
 #include <cmath>
 #include "attention.h"
 
-void attention(const float* Q, const float* K, const float* V,
-               int N, int d, float scale, bool causal, float* O) {
+void attention_decode(const float* Q, const float* K, const float* V,
+               int N, int d, float* O) {
     // ---- TODO: 你的实现 ----
     // 当前占位：全零输出，编译可过、对拍会 FAIL（提示尚未实现）。
     (void)Q;
     (void)K;
     (void)V;
-    (void)scale;
     (void)causal;
     for (int i = 0; i < N * d; ++i) {
         O[i] = 0.0f;
