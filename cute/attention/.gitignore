@@ -1,0 +1,11 @@
+# 生成产物：对拍输入/输出、C++ 可执行、维度文件（均由 code/run.sh 重新生成）
+code/artifacts/
+
+# DSL 虚拟环境与 JIT 缓存
+code/.venv-dsl/
+compiled_cache.db
+**/compiled_cache.db
+
+# Python 缓存
+__pycache__/
+*.pyc
